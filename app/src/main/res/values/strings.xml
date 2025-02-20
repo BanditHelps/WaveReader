@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Wave Reader</string>
+    <string name="book_cover_description">An example description of a book</string>
+</resources>
