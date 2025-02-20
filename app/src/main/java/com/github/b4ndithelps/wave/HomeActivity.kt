@@ -17,8 +17,13 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.wave_reader.adapter.BookCoverAdapter
+import com.github.b4ndithelps.wave.data.AppDatabase
+import com.github.b4ndithelps.wave.data.BookData
 import com.github.b4ndithelps.wave.model.Book
 import com.google.android.material.appbar.MaterialToolbar
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import nl.siegmann.epublib.epub.EpubReader
 import java.io.File
 import java.io.FileInputStream
@@ -27,6 +32,7 @@ import java.io.FileOutputStream
 class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
     private lateinit var adapter: BookCoverAdapter
     private val bookList = mutableListOf<Book>()
+    private lateinit var db: AppDatabase
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +49,8 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
 
         adapter = BookCoverAdapter(bookList, this)
         recyclerView.adapter = adapter
+
+        db = AppDatabase.getDatabase(this)
 
         loadBooksFromInternalStorage()
 
@@ -128,6 +136,23 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         val book = Book(fileName, file.absolutePath, coverImage)
         bookList.add(book)
         adapter.notifyDataSetChanged()
+
+        // Add the book and the starting information to the database
+        CoroutineScope(Dispatchers.IO).launch {
+            val bookData = BookData(bookPath = file.absolutePath)
+            if (fileName.endsWith(".epub")) {
+                val epubBook = EpubReader().readEpub(FileInputStream(file))
+
+                bookData.title = epubBook.metadata.titles.firstOrNull() ?: "Unknown Title"
+                bookData.authors = epubBook.metadata.authors.joinToString(", ") { it.toString() }
+                bookData.totalPages = epubBook.spine.spineReferences.size
+            } else {
+                bookData.title = fileName
+                bookData.authors = "Unknown"
+                bookData.totalPages = 0
+            }
+            db.bookDao().insert(bookData)
+        }
     }
 
     private fun loadBooksFromInternalStorage() {
