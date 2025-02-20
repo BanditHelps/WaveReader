@@ -1,5 +1,6 @@
 package com.github.b4ndithelps.wave
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -23,7 +24,7 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 
-class HomeActivity : AppCompatActivity() {
+class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
     private lateinit var adapter: BookCoverAdapter
     private val bookList = mutableListOf<Book>()
 
@@ -40,11 +41,18 @@ class HomeActivity : AppCompatActivity() {
 
 //        bookList.add(Book("Book 1", "https://via.placeholder.com/120x180?text=Book+1"))
 
-        adapter = BookCoverAdapter(bookList)
+        adapter = BookCoverAdapter(bookList, this)
         recyclerView.adapter = adapter
 
         loadBooksFromInternalStorage()
 
+    }
+
+    // When the book is clicked, pass it's file path over to the reader activity.
+    override fun onItemClick(book: Book) {
+        val intent = Intent(this, EpubReaderActivity::class.java)
+        intent.putExtra("bookPath", book.filePath)
+        startActivity(intent)
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {

@@ -3,6 +3,7 @@ package com.example.wave_reader.adapter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView.OnItemClickListener
 import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
@@ -10,7 +11,11 @@ import com.github.b4ndithelps.wave.R
 import com.github.b4ndithelps.wave.model.Book
 
 
-class BookCoverAdapter(private val books: List<Book>) : RecyclerView.Adapter<BookCoverAdapter.BookCoverViewHolder>() {
+class BookCoverAdapter(private val books: List<Book>, private val listener: OnItemClickListener) : RecyclerView.Adapter<BookCoverAdapter.BookCoverViewHolder>() {
+
+    interface OnItemClickListener {
+        fun onItemClick(book: Book)
+    }
 
     class BookCoverViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val bookCoverImageView: ImageView = itemView.findViewById(R.id.bookCoverImageView)
@@ -30,6 +35,11 @@ class BookCoverAdapter(private val books: List<Book>) : RecyclerView.Adapter<Boo
             Glide.with(holder.itemView.context)
                 .load("https://via.placeholder.com/120x180?text=No+Cover")
                 .into(holder.bookCoverImageView)
+        }
+
+        // Set up the listener for clicking that book
+        holder.itemView.setOnClickListener {
+            listener.onItemClick(currentBook)
         }
     }
 
