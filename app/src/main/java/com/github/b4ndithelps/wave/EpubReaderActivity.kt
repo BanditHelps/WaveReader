@@ -1,10 +1,15 @@
 package com.github.b4ndithelps.wave
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
+import android.view.View
 import android.webkit.WebView
+import android.widget.Button
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -20,6 +25,11 @@ class EpubReaderActivity : AppCompatActivity() {
     private var currentSpineIndex = 0
     private lateinit var gestureDetector: GestureDetector
 
+    private lateinit var topMenu: View
+    private lateinit var bottomMenu: View
+
+    private var isMenuVisible = false
+
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -28,6 +38,14 @@ class EpubReaderActivity : AppCompatActivity() {
 
         epubWebView = findViewById(R.id.epubWebView)
         epubWebView.settings.javaScriptEnabled = true
+
+        topMenu = findViewById(R.id.topMenu)
+        bottomMenu = findViewById(R.id.bottomMenu)
+
+        val backButton: Button = findViewById(R.id.backButton)
+        backButton.setOnClickListener {
+            finish()
+        }
 
         val bookPath = intent.getStringExtra("bookPath")
         if (bookPath != null) {
@@ -45,6 +63,8 @@ class EpubReaderActivity : AppCompatActivity() {
                     } else if (x > 2 * width / 3) {
                         // Right side
                         goToNextPage()
+                    } else {
+                        toggleMenu()
                     }
                     return true
                 }
@@ -54,6 +74,7 @@ class EpubReaderActivity : AppCompatActivity() {
             gestureDetector.onTouchEvent(event)
             false
         }
+        hideMenus()
     }
 
     private fun loadEpub(bookPath: String) {
@@ -100,5 +121,53 @@ class EpubReaderActivity : AppCompatActivity() {
             currentSpineIndex++
             loadSpineItem(currentSpineIndex)
         }
+    }
+
+    private fun toggleMenu() {
+        if (isMenuVisible) {
+            hideMenus()
+        } else {
+            showMenus()
+        }
+        isMenuVisible = !isMenuVisible
+    }
+
+    private fun showMenus() {
+        topMenu.visibility = View.VISIBLE
+        bottomMenu.visibility = View.VISIBLE
+
+        // Animation cause we tryhard like that
+        val topMenuAnimator = ObjectAnimator.ofFloat(topMenu, "translationY", -topMenu.height.toFloat(), 0f)
+        topMenuAnimator.duration = 300 // ms
+        topMenuAnimator.start()
+
+        val bottomMenuAnimator = ObjectAnimator.ofFloat(bottomMenu, "translationY", bottomMenu.height.toFloat(), 0f)
+        bottomMenuAnimator.duration = 300 // ms
+        bottomMenuAnimator.start()
+
+    }
+
+    private fun hideMenus() {
+        // Top menu animation
+        val topMenuAnimator = ObjectAnimator.ofFloat(topMenu, "translationY", 0f, -topMenu.height.toFloat())
+        topMenuAnimator.duration = 300 // ms
+        topMenuAnimator.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                topMenu.visibility = View.GONE
+            }
+        })
+        topMenuAnimator.start()
+
+
+        // Bottom Menu Animation
+        val bottomMenuAnimator = ObjectAnimator.ofFloat(bottomMenu, "translationY", 0f, bottomMenu.height.toFloat())
+        bottomMenuAnimator.duration = 300 // ms
+        bottomMenuAnimator.addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(animation: Animator) {
+                bottomMenu.visibility = View.GONE
+            }
+        })
+        bottomMenuAnimator.start()
+
     }
 }
