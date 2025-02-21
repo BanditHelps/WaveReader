@@ -16,5 +16,6 @@ data class BookData(
     @ColumnInfo(name = "is_read") var isRead: Boolean = false,
     @ColumnInfo(name = "times_read") var timesRead: Int = 0,
     @ColumnInfo(name = "rating") var rating: Int = 0,                                // Out of 5
-    @ColumnInfo(name = "total_time_read") var totalTimeRead: Long = 0                // In Seconds
+    @ColumnInfo(name = "total_time_read") var totalTimeRead: Long = 0,               // In Seconds
+    @ColumnInfo(name = "cover_image_filename") var coverImageFilename: String? = ""
 )

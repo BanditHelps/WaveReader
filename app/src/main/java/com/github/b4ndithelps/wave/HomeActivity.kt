@@ -1,20 +1,18 @@
 package com.github.b4ndithelps.wave
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
-import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.wave_reader.adapter.BookCoverAdapter
@@ -25,19 +23,22 @@ import com.google.android.material.appbar.MaterialToolbar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import nl.siegmann.epublib.domain.Resource
+import kotlinx.coroutines.withContext
 import nl.siegmann.epublib.epub.EpubReader
 import org.w3c.dom.Element
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
-import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
+/**
+ * Also known as the library activity. This is where the user manages their collection.
+ */
 class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
     private lateinit var adapter: BookCoverAdapter
     private val bookList = mutableListOf<Book>()
@@ -54,15 +55,12 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         val recyclerView: RecyclerView = findViewById(R.id.bookCoversRecyclerView)
         recyclerView.layoutManager = GridLayoutManager(this, 3)
 
-//        bookList.add(Book("Book 1", "https://via.placeholder.com/120x180?text=Book+1"))
-
         adapter = BookCoverAdapter(bookList, this)
         recyclerView.adapter = adapter
 
         db = AppDatabase.getDatabase(this)
 
-        loadBooksFromInternalStorage()
-
+        loadBooksFromDatabase()
     }
 
     // When the book is clicked, pass it's file path over to the reader activity.
@@ -71,6 +69,10 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         intent.putExtra("bookPath", book.filePath)
         startActivity(intent)
     }
+
+    // =====================================
+    //           Menu Functions
+    // =====================================
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
@@ -86,11 +88,13 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
             R.id.action_refresh -> {
                 // Refresh Library button
                 bookList.clear()
-                loadBooksFromInternalStorage()
+//                loadBooksFromInternalStorage()
+                loadBooksFromDatabase()
                 true
             } else -> super.onOptionsItemSelected(item)
         }
     }
+
 
     private val getContent = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         // I believe this is making sure that the url is valid
@@ -104,10 +108,19 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         }
     }
 
+    /**
+     * Uses the defined Activity Contract "getContent" to open the file picker, and initiate the
+     * process chain.
+     */
     private fun openFilePicker() {
         getContent.launch("*/*")
     }
 
+
+    /**
+     * Gets the name and file location of the provided file path, and copies it to the internal
+     * storage of the application. Then fires addBookToLibrary().
+     */
     private fun processFile(uri: Uri) {
         // Find the file name
         val cursor = contentResolver.query(uri, null, null, null, null)
@@ -124,6 +137,9 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         }
     }
 
+    /**
+     * A simple method that copies the contents of a file path to the internal storage of the app
+     */
     private fun copyFileToInternalStorage(uri: Uri, fileName: String): File {
         val inputStream = contentResolver.openInputStream(uri)
         val file = File(filesDir, fileName)
@@ -134,53 +150,104 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         return file
     }
 
+    /**
+     * Main method for handling the book library addition options. Does the following:
+     * - Acquire the cover image
+     * - Construct the book data object
+     * - Add to the book database
+     */
     private fun addBookToLibrary(file: File, fileName: String) {
+        // Assigns the value Cover Image to either the result of getCoverImageFromEpub() or null
         val coverImage = if (fileName.endsWith(".epub")) {
             getCoverImageFromEpub(file)
         } else {
             null
         }
 
-        // Create a new book object
-        val book = Book(fileName, file.absolutePath, coverImage)
-        bookList.add(book)
-        adapter.notifyDataSetChanged()
-
         // Add the book and the starting information to the database
         CoroutineScope(Dispatchers.IO).launch {
             val bookData = BookData(bookPath = file.absolutePath)
+
             if (fileName.endsWith(".epub")) {
                 val epubBook = EpubReader().readEpub(FileInputStream(file))
 
                 bookData.title = epubBook.metadata.titles.firstOrNull() ?: "Unknown Title"
                 bookData.authors = epubBook.metadata.authors.joinToString(", ") { it.toString() }
                 bookData.totalPages = epubBook.spine.spineReferences.size
+
+                // Do a little cleaning of the file name cause it be nasty sometimes
+                val coverImageFilePath = "cover_${bookData.title}_${bookData.authors}.jpg"
+                bookData.coverImageFilename = coverImageFilePath.sanitizeFileName()
+
+                // Attempt to save the cover image to internal storage. If it fails, let someone know
+                if (!saveCoverImageToStorage(this@HomeActivity, bookData.coverImageFilename.toString(), coverImage)) {
+                    Toast.makeText(this@HomeActivity, "Error Saving Cover Image to disk", Toast.LENGTH_SHORT).show()
+                }
             } else {
                 bookData.title = fileName
                 bookData.authors = "Unknown"
                 bookData.totalPages = 0
             }
             db.bookDao().insert(bookData)
+            // Update the UI on the main thread
+            withContext(Dispatchers.Main) {
+                loadBooksFromDatabase()
+            }
         }
     }
 
-    private fun loadBooksFromInternalStorage() {
-        val files = filesDir.listFiles()
-        files?.forEach { file ->
-            if (file.isFile && file.name.endsWith(".pdf") || file.name.endsWith(".epub")) {
-                val coverImage = if (file.name.endsWith(".epub")) {
-                    getCoverImageFromEpub(file)
+    private fun loadBooksFromDatabase() {
+        CoroutineScope(Dispatchers.IO).launch {
+            val bookDataList = db.bookDao().getAllBooks()
+            val newBookList = mutableListOf<Book>()
+            bookDataList.forEach{ bookData ->
+                val coverImageBitmap = if (bookData.coverImageFilename != null) {
+                    loadCoverImageFromStorage(this@HomeActivity, bookData.coverImageFilename)
                 } else {
                     null
                 }
 
-                val book = Book(file.name, file.absolutePath, coverImage)
-                bookList.add(book)
+                // Define the Book Object that is going in the cards of the library
+                val book = Book(
+                    bookData.bookPath,
+                    bookData.title ?: "Unknown",
+                    bookData.bookPath,
+                    coverImageBitmap
+                )
+
+                newBookList.add(book)
+            }
+            withContext(Dispatchers.Main) {
+                bookList.clear()
+                bookList.addAll(newBookList)
+                adapter.notifyDataSetChanged()
             }
         }
-        adapter.notifyDataSetChanged()
     }
 
+//    private fun loadBooksFromInternalStorage() {
+//        val files = filesDir.listFiles()
+//        files?.forEach { file ->
+//            if (file.isFile && file.name.endsWith(".pdf") || file.name.endsWith(".epub")) {
+//                val coverImage = if (file.name.endsWith(".epub")) {
+//                    getCoverImageFromEpub(file)
+//                } else {
+//                    null
+//                }
+//
+//                val book = Book(file.name, file.absolutePath, coverImage)
+//                bookList.add(book)
+//            }
+//        }
+//        adapter.notifyDataSetChanged()
+//    }
+
+
+    /**
+     * Method to determine the cover image from an epub file. Attempts to first use the built in
+     * EPUB library to acquire it, but will execute more advanced search features for improperly
+     * configured EPUBs
+     */
     private fun getCoverImageFromEpub(file: File): Bitmap? {
         return try {
             val book = EpubReader().readEpub(FileInputStream(file))
@@ -257,5 +324,71 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         } finally {
             zip.close()
         }
+    }
+
+    private fun saveCoverImageToStorage(context: Context, bookId: String, coverImageBitmap: Bitmap?): Boolean {
+        if (coverImageBitmap == null) {
+            return false
+        }
+
+        // Get the app's internal storage directory
+        val directory = context.filesDir
+
+        // Create a file object to store the image in
+        val outFile = File(directory, bookId)
+
+        try {
+            // Crate a FileOutputStream to write to the actual file
+            FileOutputStream(outFile).use { outputStream ->
+                ByteArrayOutputStream().use { byteArrayOutputStream ->
+                    // Compress the bitmap to JPEG
+                    coverImageBitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream)
+
+                    // Write the compressed data to the outputStream, aka the file
+                    outputStream.write(byteArrayOutputStream.toByteArray())
+                    outputStream.flush()
+                }
+            }
+            return true
+
+        } catch (e: IOException) {
+            e.printStackTrace()
+            return false
+        }
+    }
+
+    private fun loadCoverImageFromStorage(context: Context, fileName: String?): Bitmap? {
+        if (fileName == null) {
+            return null
+        }
+
+        val directory = context.filesDir
+        val file = File(directory, fileName)
+
+        if (!file.exists()) {
+            return null
+        }
+
+        return try {
+            FileInputStream(file).use { inputStream ->
+                BitmapFactory.decodeStream(inputStream)
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /**
+     * Makes file names not as disgusting, especially with these books
+     */
+    private fun String.sanitizeFileName(): String {
+        return this
+            // Replace any character that isn't alphanumeric, space, hyphen, or underscore
+            .replace(Regex("[^a-zA-Z0-9\\s\\-_.]"), "")
+            // Replace multiple spaces with single space
+            .replace(Regex("\\s+"), " ")
+            // Trim spaces from start and end
+            .trim()
     }
 }
