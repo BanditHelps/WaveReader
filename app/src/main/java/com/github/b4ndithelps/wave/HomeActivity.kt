@@ -196,6 +196,9 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         }
     }
 
+    /**
+     * Queries all of the books in the database, and reconstructs the library with them.
+     */
     private fun loadBooksFromDatabase() {
         CoroutineScope(Dispatchers.IO).launch {
             val bookDataList = db.bookDao().getAllBooks()
@@ -224,23 +227,6 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
             }
         }
     }
-
-//    private fun loadBooksFromInternalStorage() {
-//        val files = filesDir.listFiles()
-//        files?.forEach { file ->
-//            if (file.isFile && file.name.endsWith(".pdf") || file.name.endsWith(".epub")) {
-//                val coverImage = if (file.name.endsWith(".epub")) {
-//                    getCoverImageFromEpub(file)
-//                } else {
-//                    null
-//                }
-//
-//                val book = Book(file.name, file.absolutePath, coverImage)
-//                bookList.add(book)
-//            }
-//        }
-//        adapter.notifyDataSetChanged()
-//    }
 
 
     /**
@@ -272,6 +258,11 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         }
     }
 
+    /**
+     * this will unzip and locate the cover image inside of the EPUB. Will search the internal HTML
+     * for the cover-image property, and when it finds it, uses the image path in the href to
+     * locate the file path of the image.
+     */
     private fun extractCoverImage(epubFile: File): InputStream? {
         val zip = ZipFile(epubFile)
 
@@ -326,6 +317,9 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         }
     }
 
+    /**
+     * Caches the cover images into the internal storage as jpg files to speed up retrieval.
+     */
     private fun saveCoverImageToStorage(context: Context, bookId: String, coverImageBitmap: Bitmap?): Boolean {
         if (coverImageBitmap == null) {
             return false
@@ -357,6 +351,9 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         }
     }
 
+    /**
+     * Used to pull cached images out of the internal storage for the library.
+     */
     private fun loadCoverImageFromStorage(context: Context, fileName: String?): Bitmap? {
         if (fileName == null) {
             return null
