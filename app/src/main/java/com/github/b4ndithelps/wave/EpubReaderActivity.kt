@@ -8,12 +8,16 @@ import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
+import android.view.Window
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.ui.geometry.Rect
+import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.core.view.updatePadding
 import nl.siegmann.epublib.domain.Book
 import nl.siegmann.epublib.domain.Resource
 import nl.siegmann.epublib.epub.EpubReader
@@ -31,6 +35,7 @@ class EpubReaderActivity : AppCompatActivity() {
 
     private lateinit var topMenu: View
     private lateinit var bottomMenu: View
+    private lateinit var mainLayout: ConstraintLayout
 
     private var isMenuVisible = false
 
@@ -137,6 +142,13 @@ class EpubReaderActivity : AppCompatActivity() {
 
         topMenu = findViewById(R.id.topMenu)
         bottomMenu = findViewById(R.id.bottomMenu)
+        mainLayout = findViewById(R.id.mainLayout)
+
+        val statusBarHeight = getStatusBarHeight()
+
+        epubWebView.updatePadding(top = statusBarHeight)
+
+        topMenu.updatePadding(top = statusBarHeight)
 
         val backButton: Button = findViewById(R.id.backButton)
         backButton.setOnClickListener {
@@ -171,6 +183,13 @@ class EpubReaderActivity : AppCompatActivity() {
             false
         }
         hideMenus()
+    }
+
+    private fun getStatusBarHeight(): Int {
+        val rectangle = android.graphics.Rect()
+        val window: Window = window
+        window.decorView.getWindowVisibleDisplayFrame(rectangle)
+        return rectangle.top
     }
 
     private fun createImageResponse(imageData: ByteArray, url: String): WebResourceResponse {
