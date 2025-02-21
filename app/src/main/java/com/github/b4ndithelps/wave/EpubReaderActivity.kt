@@ -15,7 +15,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.ui.geometry.Rect
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.updatePadding
 import nl.siegmann.epublib.domain.Book
@@ -32,6 +31,7 @@ class EpubReaderActivity : AppCompatActivity() {
     private lateinit var epubBook: Book
     private var currentSpineIndex = 0
     private lateinit var gestureDetector: GestureDetector
+    private lateinit var styleManager: ReaderStyleManager
 
     private lateinit var topMenu: View
     private lateinit var bottomMenu: View
@@ -40,39 +40,6 @@ class EpubReaderActivity : AppCompatActivity() {
     private var isMenuVisible = false
 
     private val imageCache = ConcurrentHashMap<String, ByteArray>()
-
-    // CSS Styles for responsive content
-    private val responsiveStyles = """
-        <style>
-            body {
-                margin: 0;
-                padding: 16px;
-                line-height: 1.6;
-            }
-            img {
-                max-width: 100% !important;
-                height: auto !important;
-                display: block;
-                margin: 1em auto;
-            }
-            /* Handle very tall images */
-            img.tall {
-                max-height: 80vh !important;
-                width: auto !important;
-                object-fit: contain;
-            }
-            /* Basic text styles */
-            p {
-                margin: 1em 0;
-            }
-            /* Ensure content fits screen width */
-            * {
-                max-width: 100% !important;
-                box-sizing: border-box;
-            }
-        </style>
-    """.trimIndent()
-
 
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +54,8 @@ class EpubReaderActivity : AppCompatActivity() {
             useWideViewPort = true
             loadWithOverviewMode = true
         }
+
+        styleManager = ReaderStyleManager(epubWebView)
 
         // Tweaks to the webview client as to handle image loading
         epubWebView.webViewClient = object : WebViewClient() {
@@ -123,6 +92,9 @@ class EpubReaderActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
+
+                styleManager.refreshStyles()
+
                 // Inject JavaScript to handle the tall stuff
                 view?.evaluateJavascript("""
                     document.querySelectorAll('img').forEach(img => {
@@ -258,44 +230,14 @@ class EpubReaderActivity : AppCompatActivity() {
 
             // Insert responsive styles to the HTML Head
             htmlContent = if (htmlContent.contains("<head>", ignoreCase = true)) {
-                htmlContent.replace("<head>", "<head>$responsiveStyles", ignoreCase = true)
+                htmlContent.replace("<head>", "<head>${styleManager.currentStyle.toCSS()}", ignoreCase = true)
             } else {
-                "<html><head>$responsiveStyles</head><body>$htmlContent</body></html>"
+                "<html><head>${styleManager.currentStyle.toCSS()}</head><body>$htmlContent</body></html>"
             }
 
             // Setting the baseURL here for the image references
             epubWebView.loadDataWithBaseURL("file:///android_asset/", htmlContent, "text/html", "UTF-8", null)
         }
-    }
-
-
-//    private fun replaceImageReferencesWithBase64(htmlContent: String): String {
-//        var modifiedHtml = htmlContent
-//        val imgRegex = Regex("<img[^>]+src\\s*=\\s*['\"]([^'\"]+)['\"][^>]*>")
-//        val matches = imgRegex.findAll(htmlContent)
-//
-//        for (match in matches) {
-//            val imgTag = match.value
-//            var imgSrc = match.groupValues[1]
-//
-//            // Remove the relative location if it has one
-//            imgSrc = imgSrc.removePrefix("../")
-//
-//            // Find the image resource in the EPUB
-//            val imageResource = epubBook.resources.getByHref(imgSrc)
-//            if (imageResource != null) {
-//                val base64Image = encodeImageToBase64(imageResource)
-//                val dataUri = "data:${imageResource.mediaType.name};base64,$base64Image"
-//                val newImgTag = imgTag.replace(imgSrc, dataUri)
-//                modifiedHtml = modifiedHtml.replace(imgTag, newImgTag)
-//            }
-//        }
-//        return modifiedHtml
-//    }
-
-    private fun encodeImageToBase64(imageResource: Resource): String {
-        val imageData = imageResource.data
-        return Base64.getEncoder().encodeToString(imageData)
     }
 
     private fun goToPreviousPage() {
@@ -360,4 +302,28 @@ class EpubReaderActivity : AppCompatActivity() {
         bottomMenuAnimator.start()
 
     }
+
+//    // Example of handling style changes in the UI
+//    private fun setupStyleControls() {
+//        // Font size control
+//        findViewById<SeekBar>(R.id.fontSizeSeekBar)?.setOnSeekBarChangeListener(
+//            object : SeekBar.OnSeekBarChangeListener {
+//                override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+//                    if (fromUser) {
+//                        styleManager.updateFontSize(progress)
+//                    }
+//                }
+//                override fun onStartTrackingTouch(seekBar: SeekBar) {}
+//                override fun onStopTrackingTouch(seekBar: SeekBar) {}
+//            }
+//        )
+//
+//        // Theme toggle
+//        findViewById<Switch>(R.id.darkModeSwitch)?.setOnCheckedChangeListener { _, isChecked ->
+//            styleManager.updateTheme(
+//                if (isChecked) ReaderStyle.Theme.DARK else ReaderStyle.Theme.LIGHT
+//            )
+//        }
+//    }
+
 }
