@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Toast
@@ -24,10 +25,18 @@ import com.google.android.material.appbar.MaterialToolbar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import nl.siegmann.epublib.domain.Resource
 import nl.siegmann.epublib.epub.EpubReader
+import org.w3c.dom.Element
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.InputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
+import java.util.zip.ZipInputStream
+import javax.xml.parsers.DocumentBuilderFactory
 
 class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
     private lateinit var adapter: BookCoverAdapter
@@ -175,15 +184,78 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
     private fun getCoverImageFromEpub(file: File): Bitmap? {
         return try {
             val book = EpubReader().readEpub(FileInputStream(file))
+
+            // First, attempt the built in (correctly formatted) epub
             val coverImage = book.coverImage
             if (coverImage != null) {
-                BitmapFactory.decodeStream(coverImage.inputStream)
-            } else {
-                null
+                return BitmapFactory.decodeStream(coverImage.inputStream)
             }
+
+            // If the cover image is not set up correctly, this section essentially brute forces the
+            // EPUB in order to find the image.
+            val coverImageResourceStream = extractCoverImage(file)
+            if (coverImageResourceStream != null) {
+                return BitmapFactory.decodeStream(coverImageResourceStream)
+            }
+
+            null
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    private fun extractCoverImage(epubFile: File): InputStream? {
+        val zip = ZipFile(epubFile)
+
+        try {
+            // First find the content.opf file
+            val contentEntry = zip.entries().asSequence()
+                .find { it.name.endsWith("content.opf") }
+                ?: return null
+
+            // Parse the content.opf XML
+            val documentBuilder = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+            val document = zip.getInputStream(contentEntry).use { stream ->
+                documentBuilder.parse(stream)
+            }
+
+            // Find the item with cover-image property
+            val items = document.getElementsByTagName("item")
+            var coverImagePath: String? = null
+
+            for (i in 0 until items.length) {
+                val item = items.item(i) as Element
+                val properties = item.getAttribute("properties")
+                if (properties.contains("cover-image")) {
+                    coverImagePath = item.getAttribute("href")
+                    break
+                }
+            }
+
+            if (coverImagePath == null) return null
+
+            // Handle relative paths
+            val contentDir = File(contentEntry.name).parent ?: ""
+            val normalizedPath = when {
+                coverImagePath.startsWith("/") -> coverImagePath.substring(1)
+                contentDir.isNotEmpty() -> "$contentDir/$coverImagePath"
+                else -> coverImagePath
+            }.replace('\\', '/')
+
+            // Read the cover image into memory
+            val imageEntry = zip.entries().asSequence()
+                .find { it.name.replace('\\', '/') == normalizedPath }
+                ?: return null
+
+
+            // Read the entire image into a byte array and return a ByteArrayInputStream
+            return zip.getInputStream(imageEntry).use { stream ->
+                val bytes = stream.readBytes()
+                ByteArrayInputStream(bytes)
+            }
+        } finally {
+            zip.close()
         }
     }
 }
