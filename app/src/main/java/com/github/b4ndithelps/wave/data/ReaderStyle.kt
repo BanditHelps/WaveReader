@@ -4,8 +4,8 @@ data class ReaderStyle(
     val fontFamily: String = "Arial",
     val fontSize: Int = 32,
     val lineHeight: Float = 1.6f,
-    val textColor: String = "#0000000",
-    val backgroundColor: String = "#FFFFFFF",
+    val textColor: String = "#FFFFFF",
+    val backgroundColor: String = "#1A1A1A",
     val margins: Int = 2,
     val alignment: TextAlignment = TextAlignment.LEFT,
     val theme: Theme = Theme.DARK
@@ -30,7 +30,6 @@ data class ReaderStyle(
             /* Text content alignment */
             p, article, section {
                 margin: 1em 0 !important;
-                text-align: ${alignment.name.lowercase()} !important;
                 font-family: ${fontFamily} !important;
                 font-size: ${fontSize}px !important;
                 color: ${textColor} !important;

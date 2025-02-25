@@ -78,6 +78,10 @@ class EpubReaderActivity : AppCompatActivity() {
                 currentFontSize = progress
                 updateFontSizeText()
 
+                val fontSize = 14f + (progress / 100f) * 10f
+                styleManager.saveTextSize(fontSize)
+                loadSpineItem(currentSpineIndex)
+
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {

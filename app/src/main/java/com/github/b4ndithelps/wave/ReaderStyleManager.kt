@@ -73,7 +73,6 @@ class ReaderStyleManager(private val webView: WebView) {
                             background-color: ${currentStyle.backgroundColor} !important;
                         }
                         p, div, span, article, section {
-                            text-align: ${currentStyle.alignment.name.lowercase()};
                             margin: 1em 0 !important;
                         }
                     `;
