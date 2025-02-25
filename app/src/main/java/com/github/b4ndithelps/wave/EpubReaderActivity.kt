@@ -14,9 +14,15 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.SeekBar
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.updatePadding
+import com.github.b4ndithelps.wave.data.ReaderStyle
+import com.github.b4ndithelps.wave.htmlstyling.StyleManager
+import com.github.b4ndithelps.wave.htmlstyling.ThemeType
 import nl.siegmann.epublib.domain.Book
 import nl.siegmann.epublib.domain.Resource
 import nl.siegmann.epublib.epub.EpubReader
@@ -31,7 +37,15 @@ class EpubReaderActivity : AppCompatActivity() {
     private lateinit var epubBook: Book
     private var currentSpineIndex = 0
     private lateinit var gestureDetector: GestureDetector
-    private lateinit var styleManager: ReaderStyleManager
+    private lateinit var styleManager: StyleManager
+
+    // Font Size Stuff
+    private lateinit var fontSizeMenu: CardView
+    private lateinit var fontSizeSeekBar: SeekBar
+    private lateinit var fontSizeText: TextView
+    private var isFontMenuVisible = false
+    private var currentFontSize = 100 // 100%
+
 
     private lateinit var topMenu: View
     private lateinit var bottomMenu: View
@@ -46,6 +60,37 @@ class EpubReaderActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_epub_reader)
 
+        // initialize the font views
+        fontSizeMenu = findViewById(R.id.fontSizeMenu)
+        fontSizeSeekBar = findViewById(R.id.fontSizeSeekBar)
+        fontSizeText = findViewById(R.id.fontSizeText)
+
+        fontSizeMenu.alpha = 0f
+        fontSizeMenu.visibility = View.GONE
+
+        findViewById<Button>(R.id.toggleSliderButton).setOnClickListener {
+            toggleFontSizeMenu()
+        }
+
+        // Font Change listener
+        fontSizeSeekBar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekbar: SeekBar?, progress: Int, fromUser: Boolean) {
+                currentFontSize = progress
+                updateFontSizeText()
+
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                // Not needed
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // Not Needed
+            }
+        })
+
+        updateFontSizeText()
+
         epubWebView = findViewById(R.id.epubWebView)
         epubWebView.settings.apply {
             javaScriptEnabled = true
@@ -55,7 +100,8 @@ class EpubReaderActivity : AppCompatActivity() {
             loadWithOverviewMode = true
         }
 
-        styleManager = ReaderStyleManager(epubWebView)
+        styleManager = StyleManager(this)
+        styleManager.saveTheme(ThemeType.DARK)
 
         // Tweaks to the webview client as to handle image loading
         epubWebView.webViewClient = object : WebViewClient() {
@@ -93,7 +139,7 @@ class EpubReaderActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
 
-                styleManager.refreshStyles()
+//                styleManager.refreshStyles()
 
                 // Inject JavaScript to handle the tall stuff
                 view?.evaluateJavascript("""
@@ -302,6 +348,36 @@ class EpubReaderActivity : AppCompatActivity() {
         bottomMenuAnimator.start()
 
     }
+
+    private fun toggleFontSizeMenu() {
+        if (isFontMenuVisible) {
+            // Hide menu with animation
+            fontSizeMenu.animate()
+                .alpha(0f)
+                .translationY(100f)
+                .setDuration(300)
+                .withEndAction {
+                    fontSizeMenu.visibility = View.GONE
+                }
+                .start()
+        } else {
+            // Show menu with animation
+            fontSizeMenu.visibility = View.VISIBLE
+            fontSizeMenu.translationY = 100f
+            fontSizeMenu.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(300)
+                .start()
+        }
+
+        isFontMenuVisible = !isFontMenuVisible
+    }
+
+    private fun updateFontSizeText() {
+        fontSizeText.text = "Font Size: ${currentFontSize}%"
+    }
+
 
 //    // Example of handling style changes in the UI
 //    private fun setupStyleControls() {

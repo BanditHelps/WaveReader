@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.glide)
+    implementation(libs.androidx.cardview)
     implementation("nl.siegmann.epublib:epublib-core:3.1") {
         exclude(group = "xmlpull", module = "xmlPull")
         exclude(group = "net.sf.kxml", module = "kxml2")
