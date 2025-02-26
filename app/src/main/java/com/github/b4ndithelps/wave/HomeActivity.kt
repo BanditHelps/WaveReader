@@ -7,6 +7,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Toast
@@ -41,7 +42,11 @@ import javax.xml.parsers.DocumentBuilderFactory
  * It is also where the user will be able to access the global settings of the App
  */
 class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
+
+    private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: BookCoverAdapter
+    private var actionMode: ActionMode? = null
+
     private val bookList = mutableListOf<Book>()
     private lateinit var db: AppDatabase
 
@@ -52,7 +57,8 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
 
         // Locate all the elements we will need
         val toolbar : MaterialToolbar = findViewById(R.id.toolbar)
-        val recyclerView: RecyclerView = findViewById(R.id.bookCoversRecyclerView)
+        recyclerView = findViewById(R.id.bookCoversRecyclerView)
+        recyclerView.layoutManager = GridLayoutManager(this, 3)
 
         setSupportActionBar(toolbar)
 
@@ -74,6 +80,63 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         val intent = Intent(this, EpubReaderActivity::class.java)
         intent.putExtra("bookPath", book.filePath)
         startActivity(intent)
+    }
+
+    override fun onItemLongClick(position: Int): Boolean {
+        if (actionMode == null) {
+            actionMode = startActionMode(actionModeCallback)
+            return true
+        } else {
+            return false
+        }
+    }
+
+    override fun onSelectionModeChanged(selectedCount: Int) {
+        actionMode?.title = "$selectedCount selected"
+
+        if (selectedCount == 0 && actionMode != null) {
+            actionMode?.finish()
+        }
+    }
+
+    private val actionModeCallback = object : ActionMode.Callback {
+        override fun onCreateActionMode(mode: ActionMode, menu: Menu?): Boolean {
+            mode.menuInflater.inflate(R.menu.menu_context_book_selection, menu)
+            return true
+        }
+
+        override fun onPrepareActionMode(mode: ActionMode, menu: Menu?): Boolean {
+            return false
+        }
+
+        override fun onActionItemClicked(mode: ActionMode, item: MenuItem): Boolean {
+            return when (item.itemId) {
+                R.id.action_delete -> {
+                    deleteSelectedBooks()
+                    mode.finish()
+                    true
+                }
+                else -> false
+            }
+        }
+
+        override fun onDestroyActionMode(mode: ActionMode) {
+            adapter.exitSelectionMode()
+            actionMode = null
+        }
+    }
+
+    private fun deleteSelectedBooks() {
+        val selectedBooks = adapter.getSelectedItems()
+
+        adapter.removeSelectedItems()
+
+        // Delete from the db
+        CoroutineScope(Dispatchers.IO).launch {
+            selectedBooks.forEach {
+                db.bookDao().deleteBook(it.filePath)
+            }
+        }
     }
 
     // =====================================

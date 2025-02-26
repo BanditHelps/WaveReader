@@ -23,4 +23,9 @@ interface BookDao {
     @Query("SELECT * FROM books")
     suspend fun getAllBooks(): List<BookData>
 
+    // Query to delete a book from the DB
+    @Query("DELETE FROM books WHERE bookPath = :bookPath")
+    suspend fun deleteBook(bookPath: String)
+
+
 }
