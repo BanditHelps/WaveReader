@@ -31,11 +31,12 @@ import java.util.concurrent.ConcurrentHashMap
 
 class EpubReaderActivity : AppCompatActivity() {
 
+    // Global Components for the activity
     private lateinit var epubWebView: WebView
     private lateinit var epubBook: Book
-    private var currentSpineIndex = 0
     private lateinit var gestureDetector: GestureDetector
     private lateinit var styleManager: StyleManager
+    private var currentSpineIndex = 0  // Essentially the current page
 
     // Font Size Stuff
     private lateinit var fontSizeMenu: CardView
@@ -47,33 +48,90 @@ class EpubReaderActivity : AppCompatActivity() {
     private val MAX_FONT_SIZE = 64f
     private val FONT_SIZE_RANGE = MAX_FONT_SIZE - MIN_FONT_SIZE
 
-
+    // Top and Bottom Menus
     private lateinit var topMenu: View
     private lateinit var bottomMenu: View
     private lateinit var mainLayout: ConstraintLayout
 
     private var isMenuVisible = false
 
+    // A cache that enables quick access to the images in the ePub
     private val imageCache = ConcurrentHashMap<String, ByteArray>()
 
-    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
+    /**
+     * onCreate is called when the activity is first launched. It is used to setyp the menus,
+     * configure the webView, and load the book with any modifications.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_epub_reader)
 
-        // initialize the font views
+        initializeGUIComponents()
+        configureMenus()
+
+        // Initialize the StyleManager which handles all HTML overrides and user settings
+        styleManager = StyleManager(this)
+        styleManager.saveTheme(ThemeType.DARK)
+
+        configureWebView()
+
+        hideMenus()
+
+        // Pull in the book path passed to the intent, and attempt to load it
+        val bookPath = intent.getStringExtra("bookPath")
+        if (bookPath != null) {
+            loadEpub(bookPath)
+        }
+    }
+
+
+    // =====================================
+    //        Initializing Functions
+    // =====================================
+
+
+    /**
+     * Will use the Find By Id to locate and populate all of the elements of the activity in one
+     * place. Mostly for making it more readable
+     */
+    private fun initializeGUIComponents() {
+        // Essentially a web browser to display HTML
+        epubWebView = findViewById(R.id.epubWebView)
+
+        // Font Related Views
         fontSizeMenu = findViewById(R.id.fontSizeMenu)
         fontSizeSeekBar = findViewById(R.id.fontSizeSeekBar)
         fontSizeText = findViewById(R.id.fontSizeText)
 
+        // Menus
+        topMenu = findViewById(R.id.topMenu)
+        bottomMenu = findViewById(R.id.bottomMenu)
+        mainLayout = findViewById(R.id.mainLayout)
+
+    }
+
+    /**
+     * Handles all of the config related to the Top Menu, Bottom Menu, and their respective buttons
+     * This currently includes:
+     * - Font Size / Slider
+     * - Back Button
+     */
+    private fun configureMenus() {
+        // Font Related Initializers
         fontSizeMenu.alpha = 0f
         fontSizeMenu.visibility = View.GONE
 
-        findViewById<Button>(R.id.toggleSliderButton).setOnClickListener {
+        // Set up the on-press handler for the "Font Size" button
+        findViewById<Button>(R.id.toggleFontSliderButton).setOnClickListener {
             toggleFontSizeMenu()
         }
 
-        // Font Change listener
+        // Set up the on-press handler for the "Back" button
+        findViewById<Button>(R.id.backButton).setOnClickListener {
+            finish()
+        }
+
+        // Font Change Listener - Called when the font slider is moved
         fontSizeSeekBar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekbar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val fontSize = MIN_FONT_SIZE + (progress / 100f) * FONT_SIZE_RANGE
@@ -91,7 +149,17 @@ class EpubReaderActivity : AppCompatActivity() {
             }
         })
 
-        epubWebView = findViewById(R.id.epubWebView)
+        // Make the padding dynamic
+        topMenu.updatePadding(top = getStatusBarHeight())
+    }
+
+    /**
+     * Handles the initial setup of the WebView to allow things like HTML overriding, custom JS,
+     * image caching, and more
+     */
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
+    private fun configureWebView() {
+        // Default settings for what is essentially a web browser
         epubWebView.settings.apply {
             javaScriptEnabled = true
             allowFileAccess = true
@@ -100,10 +168,11 @@ class EpubReaderActivity : AppCompatActivity() {
             loadWithOverviewMode = true
         }
 
-        styleManager = StyleManager(this)
-        styleManager.saveTheme(ThemeType.DARK)
+        epubWebView.updatePadding(top = getStatusBarHeight())
 
-        // Tweaks to the webview client as to handle image loading
+        // The following overrides the webViewClient to add in custom Image loading logic. Will
+        // enable both image loading and image caching from the ePub. Will also resize them if
+        // needed.
         epubWebView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
                 view: WebView?,
@@ -156,51 +225,42 @@ class EpubReaderActivity : AppCompatActivity() {
             }
         }
 
-        topMenu = findViewById(R.id.topMenu)
-        bottomMenu = findViewById(R.id.bottomMenu)
-        mainLayout = findViewById(R.id.mainLayout)
 
-        val statusBarHeight = getStatusBarHeight()
-
-        epubWebView.updatePadding(top = statusBarHeight)
-
-        topMenu.updatePadding(top = statusBarHeight)
-
-        val backButton: Button = findViewById(R.id.backButton)
-        backButton.setOnClickListener {
-            finish()
-        }
-
-        val bookPath = intent.getStringExtra("bookPath")
-        if (bookPath != null) {
-            loadEpub(bookPath)
-        }
-
+        // Setup the page turning mechanism
         gestureDetector = GestureDetector(this, object : GestureDetector
-        .SimpleOnGestureListener() {
-            override fun onSingleTapUp(e: MotionEvent): Boolean {
-                val x = e.x
-                val width = epubWebView.width
-                if (x < width / 3) {
-                    // Left side
-                    goToPreviousPage()
-                } else if (x > 2 * width / 3) {
-                    // Right side
-                    goToNextPage()
-                } else {
-                    toggleMenu()
+            .SimpleOnGestureListener() {
+                override fun onSingleTapUp(e: MotionEvent): Boolean {
+                    val x = e.x
+                    val width = epubWebView.width
+                    if (x < width / 3) {
+                        // Left side
+                        goToPreviousPage()
+                    } else if (x > 2 * width / 3) {
+                        // Right side
+                        goToNextPage()
+                    } else {
+                        toggleMenu()
+                    }
+                    return true
                 }
-                return true
-            }
-        })
+            })
 
         epubWebView.setOnTouchListener { _, event ->
             gestureDetector.onTouchEvent(event)
             false
         }
-        hideMenus()
+
+
     }
 
+
+    // =====================================
+    //          Helper Functions
+    // =====================================
+
+    /**
+     * Returns the status bar height for use in positioning the dynamic menus.
+     */
     private fun getStatusBarHeight(): Int {
         val rectangle = android.graphics.Rect()
         val window: Window = window
@@ -208,6 +268,24 @@ class EpubReaderActivity : AppCompatActivity() {
         return rectangle.top
     }
 
+    /**
+     * Creates a WebResourceResponse for an image based on the provided image data and URL.
+     *
+     * This function determines the appropriate MIME type for the image based on the file extension
+     * in the provided URL. It then constructs a `WebResourceResponse` object that can be used
+     * by a WebView to display the image.
+     *
+     * @param imageData The byte array containing the image data.
+     * @param url The URL from which the image was (or would have been) loaded. This is used to
+     *        determine the image's MIME type based on its file extension.
+     * @return A `WebResourceResponse` object representing the image, ready to be used by a WebView.
+     *         The `WebResourceResponse` contains the correct MIME type, encoding ("UTF-8"), and a stream
+     *         containing the image data.
+     *
+     * @throws IllegalArgumentException if the url is null or empty.
+     *
+     * @throws IllegalArgumentException if the imageData is null or empty.
+     */
     private fun createImageResponse(imageData: ByteArray, url: String): WebResourceResponse {
         val mimeType = when {
             url.endsWith(".jpg", true) || url.endsWith(".jpeg", true) -> "image/jpeg"
@@ -224,6 +302,10 @@ class EpubReaderActivity : AppCompatActivity() {
         )
     }
 
+    /**
+     * A method to search through the resources inside of the EPUB looking for a specific one.
+     * i.e Images, CSS, etc.
+     */
     private fun findResourceByHref(href: String): Resource? {
         // Search in the EPUB resources
         return epubBook.resources.getAll()?.find { resource ->
@@ -231,7 +313,9 @@ class EpubReaderActivity : AppCompatActivity() {
         }
     }
 
-
+    /**
+     * Opens up the book, and opens the first Spine or chapter.
+     */
     private fun loadEpub(bookPath: String) {
         try {
             val epubReader = EpubReader()
@@ -250,7 +334,6 @@ class EpubReaderActivity : AppCompatActivity() {
                     "UTF-8"
                 )
             }
-
 
         } catch (e: Exception) {
             e.printStackTrace()

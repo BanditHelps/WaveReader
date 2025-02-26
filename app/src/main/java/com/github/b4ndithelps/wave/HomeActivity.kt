@@ -38,6 +38,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * Also known as the library activity. This is where the user manages their collection.
+ * It is also where the user will be able to access the global settings of the App
  */
 class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
     private lateinit var adapter: BookCoverAdapter
@@ -49,12 +50,14 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         enableEdgeToEdge()
         setContentView(R.layout.activity_home)
 
+        // Locate all the elements we will need
         val toolbar : MaterialToolbar = findViewById(R.id.toolbar)
+        val recyclerView: RecyclerView = findViewById(R.id.bookCoversRecyclerView)
+
         setSupportActionBar(toolbar)
 
-        val recyclerView: RecyclerView = findViewById(R.id.bookCoversRecyclerView)
+        // This recycler shows all of the books in an expandable, scrollable grid
         recyclerView.layoutManager = GridLayoutManager(this, 3)
-
         adapter = BookCoverAdapter(bookList, this)
         recyclerView.adapter = adapter
 
@@ -63,7 +66,10 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         loadBooksFromDatabase()
     }
 
-    // When the book is clicked, pass it's file path over to the reader activity.
+    /**
+     * When any book in the library is clicked, this method will be called, opening up a new
+     * reader, using the file path of the book being opened.
+     */
     override fun onItemClick(book: Book) {
         val intent = Intent(this, EpubReaderActivity::class.java)
         intent.putExtra("bookPath", book.filePath)
@@ -74,11 +80,19 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
     //           Menu Functions
     // =====================================
 
+    /**
+     * Top Menu bar container
+     */
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         return true
     }
 
+    /**
+     * Button Handlers for the Top Menu. Includes the following:
+     * - Import New Book
+     * - Refresh Library
+     */
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_import -> {
@@ -88,7 +102,6 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
             R.id.action_refresh -> {
                 // Refresh Library button
                 bookList.clear()
-//                loadBooksFromInternalStorage()
                 loadBooksFromDatabase()
                 true
             } else -> super.onOptionsItemSelected(item)
@@ -259,7 +272,7 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
     }
 
     /**
-     * this will unzip and locate the cover image inside of the EPUB. Will search the internal HTML
+     * This will unzip and locate the cover image inside of the EPUB. Will search the internal HTML
      * for the cover-image property, and when it finds it, uses the image path in the href to
      * locate the file path of the image.
      */

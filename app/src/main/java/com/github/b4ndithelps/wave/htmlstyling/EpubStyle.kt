@@ -1,5 +1,26 @@
 package com.github.b4ndithelps.wave.htmlstyling
 
+
+/**
+ * Represents the styling for an EPUB document.
+ *
+ * This data class encapsulates the visual presentation aspects of an EPUB,
+ * including text colors, background colors, font properties, text alignment,
+ * margins, and theme type. It also provides a method to generate CSS code
+ * that can be directly applied to HTML content to achieve the specified
+ * style.
+ *
+ * @property textColor The color of the text (e.g., "#000000" for black).
+ * @property backgroundColor The background color of the document (e.g., "#FFFFFF" for white).
+ * @property linkColor The color of hyperlinks (e.g., "#0000FF" for blue).
+ * @property textSize The base font size for the document in pixels (e.g., 16.0f).
+ * @property lineHeight The line height of the text, as a multiplier of the font size (e.g., 1.5f).
+ * @property fontFamily The preferred font family for the document (e.g., "Arial").
+ * @property paragraphSpacing The spacing between paragraphs, in em units (e.g., 1.0f).
+ * @property textAlign The alignment of the text within the document. See [TextAlign].
+ * @property margin The margin around the content, in pixels (e.g., 20).
+ * @property themeType The theme type (light or dark). See [ThemeType].
+ */
 data class EpubStyle(
     val textColor: String,
     val backgroundColor: String,

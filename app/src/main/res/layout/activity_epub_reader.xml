@@ -109,7 +109,7 @@
             android:text="Back" />
 
         <Button
-            android:id="@+id/toggleSliderButton"
+            android:id="@+id/toggleFontSliderButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Font Size" />
