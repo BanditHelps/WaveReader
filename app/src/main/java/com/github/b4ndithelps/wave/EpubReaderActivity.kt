@@ -20,7 +20,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.updatePadding
-import com.github.b4ndithelps.wave.data.ReaderStyle
 import com.github.b4ndithelps.wave.htmlstyling.StyleManager
 import com.github.b4ndithelps.wave.htmlstyling.ThemeType
 import nl.siegmann.epublib.domain.Book
@@ -28,7 +27,6 @@ import nl.siegmann.epublib.domain.Resource
 import nl.siegmann.epublib.epub.EpubReader
 import java.io.ByteArrayInputStream
 import java.io.FileInputStream
-import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 
 class EpubReaderActivity : AppCompatActivity() {
@@ -44,7 +42,10 @@ class EpubReaderActivity : AppCompatActivity() {
     private lateinit var fontSizeSeekBar: SeekBar
     private lateinit var fontSizeText: TextView
     private var isFontMenuVisible = false
-    private var currentFontSize = 100 // 100%
+
+    private val MIN_FONT_SIZE = 14f
+    private val MAX_FONT_SIZE = 64f
+    private val FONT_SIZE_RANGE = MAX_FONT_SIZE - MIN_FONT_SIZE
 
 
     private lateinit var topMenu: View
@@ -75,13 +76,10 @@ class EpubReaderActivity : AppCompatActivity() {
         // Font Change listener
         fontSizeSeekBar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekbar: SeekBar?, progress: Int, fromUser: Boolean) {
-                currentFontSize = progress
-                updateFontSizeText()
-
-                val fontSize = 14f + (progress / 100f) * 10f
+                val fontSize = MIN_FONT_SIZE + (progress / 100f) * FONT_SIZE_RANGE
+                fontSliderGUIUpdate()
                 styleManager.saveTextSize(fontSize)
                 loadSpineItem(currentSpineIndex)
-
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {
@@ -92,8 +90,6 @@ class EpubReaderActivity : AppCompatActivity() {
                 // Not Needed
             }
         })
-
-        updateFontSizeText()
 
         epubWebView = findViewById(R.id.epubWebView)
         epubWebView.settings.apply {
@@ -142,8 +138,6 @@ class EpubReaderActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-
-//                styleManager.refreshStyles()
 
                 // Inject JavaScript to handle the tall stuff
                 view?.evaluateJavascript("""
@@ -366,6 +360,7 @@ class EpubReaderActivity : AppCompatActivity() {
                 .start()
         } else {
             // Show menu with animation
+            fontSliderGUIUpdate()
             fontSizeMenu.visibility = View.VISIBLE
             fontSizeMenu.translationY = 100f
             fontSizeMenu.animate()
@@ -378,32 +373,22 @@ class EpubReaderActivity : AppCompatActivity() {
         isFontMenuVisible = !isFontMenuVisible
     }
 
-    private fun updateFontSizeText() {
-        fontSizeText.text = "Font Size: ${currentFontSize}%"
+    /**
+     * A method used to provide feedback to the font slider to make it display the correct percentage.
+     * - Mode 0: Initial update to just load the existing stored value
+     * - Mode 1: Update when the slider is moved
+     */
+    private fun fontSliderGUIUpdate() {
+        val currentFontSize = styleManager.currentStyle.textSize
+
+        val progress = ((currentFontSize - MIN_FONT_SIZE) / FONT_SIZE_RANGE * 100).toInt().coerceIn(0, 100)
+
+        fontSizeSeekBar.progress = progress
+
+        // Format to one decimal place for cleaner display
+        val formattedSize = String.format("%.1f", currentFontSize)
+        fontSizeText.text = "Font Size: $formattedSize px"
+
     }
-
-
-//    // Example of handling style changes in the UI
-//    private fun setupStyleControls() {
-//        // Font size control
-//        findViewById<SeekBar>(R.id.fontSizeSeekBar)?.setOnSeekBarChangeListener(
-//            object : SeekBar.OnSeekBarChangeListener {
-//                override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-//                    if (fromUser) {
-//                        styleManager.updateFontSize(progress)
-//                    }
-//                }
-//                override fun onStartTrackingTouch(seekBar: SeekBar) {}
-//                override fun onStopTrackingTouch(seekBar: SeekBar) {}
-//            }
-//        )
-//
-//        // Theme toggle
-//        findViewById<Switch>(R.id.darkModeSwitch)?.setOnCheckedChangeListener { _, isChecked ->
-//            styleManager.updateTheme(
-//                if (isChecked) ReaderStyle.Theme.DARK else ReaderStyle.Theme.LIGHT
-//            )
-//        }
-//    }
 
 }
