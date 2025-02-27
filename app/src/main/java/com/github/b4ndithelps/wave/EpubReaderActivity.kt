@@ -5,17 +5,21 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.Window
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -64,13 +68,20 @@ class EpubReaderActivity : AppCompatActivity() {
     // Page Management
     private var currentPageIndex = 0  // Current page within a spine
     private var totalPages = 1        // Total pages in the current spine
-    private var pageOffsetY = 0       // Current vertical offset of the page
     private var pageHeight = 0        // Height of the "page" in pixels
 
     private var pagePositionsMap = mutableMapOf<Int, MutableList<Float>>() // Maps a page index to a list of page positions
 
     private var savedPosition: SavedPosition? = null
     private var goToLastPageWhenLoaded = false
+
+    private lateinit var pageInfoBar: LinearLayout
+    private lateinit var pageNumberText: TextView
+    private lateinit var chapterTitleText: TextView
+    private lateinit var progressText: TextView
+
+
+    private var isSystemUIVisible = true
 
     /**
      * onCreate is called when the activity is first launched. It is used to setyp the menus,
@@ -82,6 +93,8 @@ class EpubReaderActivity : AppCompatActivity() {
 
         initializeGUIComponents()
         configureMenus()
+
+        hideSystemUI()
 
         // Initialize the StyleManager which handles all HTML overrides and user settings
         styleManager = StyleManager(this)
@@ -121,6 +134,12 @@ class EpubReaderActivity : AppCompatActivity() {
         topMenu = findViewById(R.id.topMenu)
         bottomMenu = findViewById(R.id.bottomMenu)
         mainLayout = findViewById(R.id.mainLayout)
+
+        // Page Tracker
+        pageInfoBar = findViewById(R.id.page_info_bar)
+        pageNumberText = findViewById(R.id.page_number_text)
+        chapterTitleText = findViewById(R.id.chapter_title_text)
+        progressText = findViewById(R.id.progress_text)
 
     }
 
@@ -486,7 +505,6 @@ class EpubReaderActivity : AppCompatActivity() {
 
             // Find which page we're currently on based on scroll position
             for (i in positions.indices) {
-                val position = positions[i].toInt()
                 // If this is the last position or the scroll is before the next position
                 if (i == positions.size - 1 || scrollY < positions[i + 1].toInt()) {
                     if (currentPageIndex != i) {
@@ -501,8 +519,29 @@ class EpubReaderActivity : AppCompatActivity() {
     }
 
     private fun updatePageInfo() {
-        // Update UI with currentPage / total pages
-        // TODO
+        // Update page number
+        pageNumberText.text = "Page ${currentPageIndex + 1} of $totalPages"
+
+        // Update chapter title
+        val spine = epubBook.spine.spineReferences
+        val chapterTitle = if (currentSpineIndex < spine.size) {
+            spine[currentSpineIndex].resource.title ?: "Chapter ${currentSpineIndex + 1}"
+        } else {
+            "Chapter ${currentSpineIndex + 1}"
+        }
+        chapterTitleText.text = chapterTitle
+
+        // Calculate and update overall progress
+        val totalSpines = epubBook.spine.spineReferences.size
+        val progress = if (totalSpines > 0) {
+            val spineWeight = 1.0f / totalSpines
+            val currentSpineProgress = if (totalPages > 0) currentPageIndex.toFloat() / totalPages else 0f
+            val overallProgress = (currentSpineIndex * spineWeight) + (currentSpineProgress * spineWeight)
+            (overallProgress * 100).toInt()
+        } else {
+            0
+        }
+        progressText.text = "$progress%"
     }
 
     private fun goToNextSpine() {
@@ -565,8 +604,12 @@ class EpubReaderActivity : AppCompatActivity() {
     private fun toggleMenu() {
         if (isMenuVisible) {
             hideMenus()
+            hideSystemUI()
+            pageInfoBar.visibility = View.VISIBLE
         } else {
             showMenus()
+            showSystemUI()
+            pageInfoBar.visibility = View.GONE
         }
         isMenuVisible = !isMenuVisible
     }
@@ -634,6 +677,47 @@ class EpubReaderActivity : AppCompatActivity() {
         }
 
         isFontMenuVisible = !isFontMenuVisible
+    }
+
+    // Add this function to toggle system UI visibility
+    private fun toggleSystemUI() {
+        if (isSystemUIVisible) {
+            hideSystemUI()
+        } else {
+            showSystemUI()
+        }
+    }
+
+    // Function to hide system UI (status and navigation bars)
+    private fun hideSystemUI() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.let {
+                it.hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_IMMERSIVE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_FULLSCREEN)
+        }
+        isSystemUIVisible = false
+    }
+
+    // Function to show system UI
+    private fun showSystemUI() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.insetsController?.show(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN)
+        }
+        isSystemUIVisible = true
     }
 
     /**
