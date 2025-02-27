@@ -4,4 +4,11 @@
     android:layout_height="wrap_content"
     android:background="#80000000">
 
+    <include
+        android:id="@+id/spotifyControlsInclude"
+        layout="@layout/layout_spotify_controls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp" />
+
 </FrameLayout>

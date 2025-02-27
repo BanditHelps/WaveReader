@@ -77,7 +77,7 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
      * reader, using the file path of the book being opened.
      */
     override fun onItemClick(book: Book) {
-        val intent = Intent(this, EpubReaderActivity::class.java)
+        val intent = Intent(this, SpotifyEpubReaderActivity::class.java)
         intent.putExtra("bookPath", book.filePath)
         startActivity(intent)
     }
