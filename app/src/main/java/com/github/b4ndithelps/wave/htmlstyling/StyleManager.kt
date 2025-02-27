@@ -40,17 +40,17 @@ class StyleManager(private val context: Context) {
             }
         }
 
-    // Predefined themes
+    // Predefined themes with enhanced book-like styling
     private fun getLightStyle() = EpubStyle(
         textColor = "#333333",
-        backgroundColor = "#FFFFFF",
+        backgroundColor = "#FFFBF2", // Slightly off-white for better eye comfort
         linkColor = "#1E88E5",
         textSize = 18f,
-        lineHeight = 1.5f,
-        fontFamily = "sans-serif",
+        lineHeight = 1.6f, // Increased line height for better readability
+        fontFamily = "Georgia, serif", // More book-like serif font
         paragraphSpacing = 1.2f,
         textAlign = TextAlign.JUSTIFY,
-        margin = 16,
+        margin = 20, // Increased margins for more comfortable reading
         themeType = ThemeType.LIGHT
     )
 
@@ -59,11 +59,11 @@ class StyleManager(private val context: Context) {
         backgroundColor = "#121212",
         linkColor = "#64B5F6",
         textSize = 18f,
-        lineHeight = 1.5f,
-        fontFamily = "sans-serif",
+        lineHeight = 1.6f, // Increased line height for better readability
+        fontFamily = "Palatino, Georgia, serif", // More book-like serif font
         paragraphSpacing = 1.2f,
         textAlign = TextAlign.JUSTIFY,
-        margin = 16,
+        margin = 20, // Increased margins for more comfortable reading
         themeType = ThemeType.DARK
     )
 
@@ -72,11 +72,11 @@ class StyleManager(private val context: Context) {
         backgroundColor = "#F8F1E3",
         linkColor = "#9C6644",
         textSize = 18f,
-        lineHeight = 1.5f,
-        fontFamily = "serif",
+        lineHeight = 1.6f, // Increased line height for better readability
+        fontFamily = "Palatino, Georgia, serif", // Traditional book font
         paragraphSpacing = 1.2f,
         textAlign = TextAlign.JUSTIFY,
-        margin = 16,
+        margin = 20, // Increased margins for more comfortable reading
         themeType = ThemeType.SEPIA
     )
 

@@ -49,9 +49,14 @@ data class EpubStyle(
                     line-height: ${lineHeight};
                     color: $textColor;
                     background-color: $backgroundColor;
-                    margin: ${margin}px;
+                    margin: ${margin * 2}px ${margin * 1.5}px;
                     padding: 0;
                     text-align: ${textAlign.toCssValue()};
+                    hyphens: auto;
+                    -webkit-hyphens: auto;
+                    -ms-hyphens: auto;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
                 }
                 
                 p, div {
@@ -60,6 +65,14 @@ data class EpubStyle(
                     font-family: inherit;
                     font-size: inherit;
                     color: inherit;
+                    orphans: 4;
+                    widows: 4;
+                }
+                
+                /* Allow proper indentation for paragraphs */
+                p {
+                    margin-top: 0;
+                    margin-bottom: ${paragraphSpacing}em;
                 }
                 
                 h1, h2, h3, h4, h5, h6 {
@@ -68,6 +81,8 @@ data class EpubStyle(
                     margin-top: 1.5em;
                     margin-bottom: 0.5em;
                     color: inherit;
+                    page-break-after: avoid;
+                    break-after: avoid;
                 }
                 
                 h1 { font-size: 1.6em; }
@@ -87,6 +102,8 @@ data class EpubStyle(
                     height: auto;
                     display: block;
                     margin: 1em auto;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }
                 
                 ul, ol {
@@ -104,6 +121,8 @@ data class EpubStyle(
                     padding-left: 1em;
                     font-style: italic;
                     color: inherit;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }
                 
                 code, pre {
@@ -118,12 +137,16 @@ data class EpubStyle(
                     padding: 1em;
                     overflow-x: auto;
                     white-space: pre-wrap;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }
                 
                 table {
                     border-collapse: collapse;
                     width: 100%;
                     margin: 1em 0;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }
                 
                 table, th, td {
@@ -144,7 +167,7 @@ data class EpubStyle(
                 /* Responsive design for different screen sizes */
                 @media screen and (max-width: 600px) {
                     body {
-                        margin: ${margin / 2}px;
+                        margin: ${margin}px;
                     }
                     
                     h1 { font-size: 1.4em; }

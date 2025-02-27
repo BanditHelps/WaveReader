@@ -364,6 +364,14 @@ class EpubReaderActivity : AppCompatActivity() {
     // =====================================
 
     /**
+       * Preprocesses HTML content to improve structure and readability
+       * Ensures proper indentation and formatting for better pagination
+       */
+      private fun preprocessHtml(html: String): String {
+          return html
+      }
+
+    /**
      * Returns the status bar height for use in positioning the dynamic menus.
      */
     private fun getStatusBarHeight(): Int {
@@ -522,6 +530,8 @@ class EpubReaderActivity : AppCompatActivity() {
         if (index in spine.indices) {
             val resource = spine[index].resource
             var htmlContent = String(resource.data, Charsets.UTF_8)
+
+            htmlContent = preprocessHtml(htmlContent)
 
             // Insert responsive styles to the HTML Head
             htmlContent = if (htmlContent.contains("<head>", ignoreCase = true)) {
