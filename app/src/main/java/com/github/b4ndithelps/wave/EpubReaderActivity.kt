@@ -72,6 +72,12 @@ class EpubReaderActivity : AppCompatActivity() {
 
     private var pagePositionsMap = mutableMapOf<Int, MutableList<Float>>() // Maps a page index to a list of page positions
 
+    private val PAGE_INFO_BAR_HEIGHT_PX by lazy {
+        val heightDp = 8 // Approximate height of your info bar in dp
+        val density = resources.displayMetrics.density
+        (heightDp * density).toInt() // Convert to pixels
+    }
+
     private var savedPosition: SavedPosition? = null
     private var goToLastPageWhenLoaded = false
 
@@ -259,7 +265,7 @@ class EpubReaderActivity : AppCompatActivity() {
                     
                     // Calculate pages based on content height and viewport height
                     function calculatePages() {
-                        const pageHeight = ${pageHeight};
+                        const pageHeight = ${pageHeight - PAGE_INFO_BAR_HEIGHT_PX}; // Subtract the info bar height
                         const contentHeight = document.body.scrollHeight;
                         const pageCount = Math.ceil(contentHeight / pageHeight);
                         
@@ -273,9 +279,11 @@ class EpubReaderActivity : AppCompatActivity() {
                         PageCalculator.onPageCalculationComplete(pageCount, pagePositions.join(','));
                     }
                     
+                    // Also add padding to the bottom of the content to prevent text from being cut off
+                    document.body.style.paddingBottom = "${PAGE_INFO_BAR_HEIGHT_PX}px";
+                    
                     // Calculate once everything is loaded
                     window.onload = calculatePages;
-                    
                     // Also calculate now in case onload already fired
                     calculatePages();
                     
