@@ -6,6 +6,12 @@ import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
+import androidx.lifecycle.lifecycleScope
+import com.github.b4ndithelps.wave.data.AppDatabase
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -113,7 +119,9 @@ class EpubReaderActivity : AppCompatActivity() {
         // Pull in the book path passed to the intent, and attempt to load it
         val bookPath = intent.getStringExtra("bookPath")
         if (bookPath != null) {
-            loadEpub(bookPath)
+            lifecycleScope.launch {
+                prepareAndLoadBook(bookPath)
+            }
         }
     }
 
@@ -411,41 +419,97 @@ class EpubReaderActivity : AppCompatActivity() {
     }
 
     /**
-     * Opens up the book, and opens the first Spine or chapter.
+     * Prepares book loading by first loading the saved position, then loading the book
+     * This ensures the position is available before the book loads
      */
-    private fun loadEpub(bookPath: String) {
+    private suspend fun prepareAndLoadBook(bookPath: String) {
         try {
-            val epubReader = EpubReader()
-            epubBook = epubReader.readEpub(FileInputStream(bookPath))
-
-            loadSavedPosition()
-
-            // Get the first chapter (spine element)
-            val spine = epubBook.spine.spineReferences
-            if (spine.isNotEmpty()) {
-                if (savedPosition != null) {
-                    currentSpineIndex = savedPosition!!.spineIndex
-                } else {
-                    currentSpineIndex = 0
-                }
-
-                loadSpineItem(currentSpineIndex)
-            } else {
-                // Handle the case where there are no spine elements
+            // First, load the saved position from the database
+            val position = loadSavedPositionSuspend(bookPath)
+            
+            // Then load the book with the position already known
+            loadEpubWithPosition(bookPath, position)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            withContext(Dispatchers.Main) {
                 epubWebView.loadData(
-                    "<html><body><h1>Error: No content found</h1></body></html>",
+                    "<html><body><h1>Error: Could not load book</h1></body></html>",
                     "text/html",
                     "UTF-8"
                 )
             }
+        }
+    }
+    
+    /**
+     * Loads saved position from database in a suspending function
+     * that will complete before proceeding with book loading
+     */
+    private suspend fun loadSavedPositionSuspend(bookPath: String): SavedPosition? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val bookDao = AppDatabase.getDatabase(applicationContext).bookDao()
+                val bookData = bookDao.getBookByPath(bookPath)
+                
+                if (bookData != null) {
+                    // Return the position data from the database
+                    SavedPosition(
+                        bookData.currentSpineIndex,
+                        bookData.currentPageIndex
+                    )
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+    }
 
-        } catch (e: Exception) {
-            e.printStackTrace()
-            epubWebView.loadData(
-                "<html><body><h1>Error: Could not load book</h1></body></html>",
-                "text/html",
-                "UTF-8"
-            )
+    /**
+     * Opens up the book, and opens the first Spine or chapter.
+     * Now takes a pre-loaded position parameter to avoid race conditions
+     */
+    private suspend fun loadEpubWithPosition(bookPath: String, position: SavedPosition?) {
+        withContext(Dispatchers.IO) {
+            try {
+                val epubReader = EpubReader()
+                epubBook = epubReader.readEpub(FileInputStream(bookPath))
+                
+                // Set the saved position
+                savedPosition = position
+                
+                withContext(Dispatchers.Main) {
+                    // Get the first chapter (spine element)
+                    val spine = epubBook.spine.spineReferences
+                    if (spine.isNotEmpty()) {
+                        if (savedPosition != null) {
+                            currentSpineIndex = savedPosition!!.spineIndex
+                        } else {
+                            currentSpineIndex = 0
+                        }
+
+                        loadSpineItem(currentSpineIndex)
+                    } else {
+                        // Handle the case where there are no spine elements
+                        epubWebView.loadData(
+                            "<html><body><h1>Error: No content found</h1></body></html>",
+                            "text/html",
+                            "UTF-8"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    epubWebView.loadData(
+                        "<html><body><h1>Error: Could not load book</h1></body></html>",
+                        "text/html",
+                        "UTF-8"
+                    )
+                }
+            }
         }
     }
 
@@ -571,42 +635,42 @@ class EpubReaderActivity : AppCompatActivity() {
         }
     }
 
-    // Save position function
+    // Save position function using Room database
     private fun saveReaderPosition() {
-        val bookId = epubBook.title ?: "unknown_book"
+        val bookPath = intent.getStringExtra("bookPath") ?: return
         val position = SavedPosition(currentSpineIndex, currentPageIndex)
 
-        val sharedPrefs = getSharedPreferences("epub_reader_prefs", Context.MODE_PRIVATE)
-        val editor = sharedPrefs.edit()
-
-        // Convert position to JSON or string format
-        val positionJson = "{\"spineIndex\":${position.spineIndex},\"pageIndex\":${position.pageIndex}}"
-        editor.putString("position_$bookId", positionJson)
-        editor.apply()
-    }
-
-    // Load position function - call this in your loadEpub method
-    private fun loadSavedPosition() {
-        val bookId = epubBook.title ?: "unknown_book"
-        val sharedPrefs = getSharedPreferences("epub_reader_prefs", Context.MODE_PRIVATE)
-        val positionJson = sharedPrefs.getString("position_$bookId", null)
-
-        if (positionJson != null) {
+        lifecycleScope.launch {
             try {
-                // Simple JSON parsing
-                val spineIndex = Regex("\"spineIndex\":(\\d+)").find(positionJson)?.groupValues?.get(1)?.toInt() ?: 0
-                val pageIndex = Regex("\"pageIndex\":(\\d+)").find(positionJson)?.groupValues?.get(1)?.toInt() ?: 0
-
-                savedPosition = SavedPosition(spineIndex, pageIndex)
-
-                // Set the current spine index
-                currentSpineIndex = spineIndex
-                // Note: The page index will be applied after page calculation in onPageFinished
+                val bookDao = AppDatabase.getDatabase(applicationContext).bookDao()
+                
+                // First check if book exists in database
+                var bookData = bookDao.getBookByPath(bookPath)
+                
+                if (bookData != null) {
+                    // Update just the position fields
+                    bookDao.updateReadingPosition(bookPath, position.spineIndex, position.pageIndex)
+                } else {
+                    // Book doesn't exist yet, create a minimal record
+                    bookData = com.github.b4ndithelps.wave.data.BookData(
+                        bookPath = bookPath,
+                        title = epubBook.title ?: "Unknown Title",
+                        currentSpineIndex = position.spineIndex,
+                        currentPageIndex = position.pageIndex
+                    )
+                    bookDao.insert(bookData)
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
-                savedPosition = null
             }
         }
+    }
+
+    // Old method kept for reference, but no longer used
+    // Now using loadSavedPositionSuspend which returns the position directly
+    @Deprecated("Use loadSavedPositionSuspend instead")
+    private fun loadSavedPosition() {
+        // This method is no longer used - see loadSavedPositionSuspend
     }
 
     private fun toggleMenu() {

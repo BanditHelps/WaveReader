@@ -17,5 +17,7 @@ data class BookData(
     @ColumnInfo(name = "times_read") var timesRead: Int = 0,
     @ColumnInfo(name = "rating") var rating: Int = 0,                                // Out of 5
     @ColumnInfo(name = "total_time_read") var totalTimeRead: Long = 0,               // In Seconds
-    @ColumnInfo(name = "cover_image_filename") var coverImageFilename: String? = ""
+    @ColumnInfo(name = "cover_image_filename") var coverImageFilename: String? = "",
+    @ColumnInfo(name = "current_spine_index") var currentSpineIndex: Int = 0,        // Current chapter position
+    @ColumnInfo(name = "current_page_index") var currentPageIndex: Int = 0           // Current page within chapter
 )

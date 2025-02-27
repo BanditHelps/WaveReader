@@ -26,6 +26,8 @@ interface BookDao {
     // Query to delete a book from the DB
     @Query("DELETE FROM books WHERE bookPath = :bookPath")
     suspend fun deleteBook(bookPath: String)
-
-
+    
+    // Update reading position for a book
+    @Query("UPDATE books SET current_spine_index = :spineIndex, current_page_index = :pageIndex WHERE bookPath = :bookPath")
+    suspend fun updateReadingPosition(bookPath: String, spineIndex: Int, pageIndex: Int)
 }
