@@ -4,14 +4,12 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
-import android.content.Context
 import android.os.Build
 import androidx.lifecycle.lifecycleScope
 import com.github.b4ndithelps.wave.data.AppDatabase
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -364,12 +362,20 @@ class EpubReaderActivity : AppCompatActivity() {
     // =====================================
 
     /**
-       * Preprocesses HTML content to improve structure and readability
-       * Ensures proper indentation and formatting for better pagination
-       */
-      private fun preprocessHtml(html: String): String {
-          return html
-      }
+     * Preprocesses HTML content to improve structure and readability
+     * Ensures proper indentation and formatting for better pagination
+     */
+    private fun preprocessHtml(html: String): String {
+        var processedHtml = html
+        
+        // Add chapter-first class to first paragraph after chapter headers
+        processedHtml = processedHtml.replace(
+            regex = Regex("(<h[1-6][^>]*>.*?</h[1-6]>\\s*)(<p)([^>]*>)", RegexOption.DOT_MATCHES_ALL),
+            replacement = "$1$2 class=\"chapter-first\"$3"
+        )
+
+        return processedHtml
+    }
 
     /**
      * Returns the status bar height for use in positioning the dynamic menus.

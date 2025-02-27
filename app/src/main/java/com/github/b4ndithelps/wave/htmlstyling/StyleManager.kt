@@ -45,12 +45,12 @@ class StyleManager(private val context: Context) {
         textColor = "#333333",
         backgroundColor = "#FFFBF2", // Slightly off-white for better eye comfort
         linkColor = "#1E88E5",
-        textSize = 18f,
-        lineHeight = 1.6f, // Increased line height for better readability
-        fontFamily = "Georgia, serif", // More book-like serif font
-        paragraphSpacing = 1.2f,
+        textSize = 39f,
+        lineHeight = 1.8f, // Increased line height for better readability
+        fontFamily = "Georgia, 'Libre Baskerville', serif", // More book-like serif font
+        paragraphSpacing = 1.4f, // Increased paragraph spacing for better readability
         textAlign = TextAlign.JUSTIFY,
-        margin = 20, // Increased margins for more comfortable reading
+        margin = 24, // Increased margins for more comfortable reading
         themeType = ThemeType.LIGHT
     )
 
@@ -58,12 +58,12 @@ class StyleManager(private val context: Context) {
         textColor = "#E0E0E0",
         backgroundColor = "#121212",
         linkColor = "#64B5F6",
-        textSize = 18f,
-        lineHeight = 1.6f, // Increased line height for better readability
-        fontFamily = "Palatino, Georgia, serif", // More book-like serif font
-        paragraphSpacing = 1.2f,
+        textSize = 39f,
+        lineHeight = 1.8f, // Increased line height for better readability
+        fontFamily = "Palatino, Georgia, 'Libre Baskerville', serif", // More book-like serif font
+        paragraphSpacing = 0.2f, // Increased paragraph spacing for better readability
         textAlign = TextAlign.JUSTIFY,
-        margin = 20, // Increased margins for more comfortable reading
+        margin = 36, // Increased margins for more comfortable reading
         themeType = ThemeType.DARK
     )
 
@@ -72,11 +72,11 @@ class StyleManager(private val context: Context) {
         backgroundColor = "#F8F1E3",
         linkColor = "#9C6644",
         textSize = 18f,
-        lineHeight = 1.6f, // Increased line height for better readability
-        fontFamily = "Palatino, Georgia, serif", // Traditional book font
-        paragraphSpacing = 1.2f,
+        lineHeight = 1.8f, // Increased line height for better readability
+        fontFamily = "Palatino, Georgia, 'Libre Baskerville', serif", // Traditional book font
+        paragraphSpacing = 1.4f, // Increased paragraph spacing for better readability
         textAlign = TextAlign.JUSTIFY,
-        margin = 20, // Increased margins for more comfortable reading
+        margin = 24, // Increased margins for more comfortable reading
         themeType = ThemeType.SEPIA
     )
 
