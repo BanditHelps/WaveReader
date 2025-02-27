@@ -4,11 +4,13 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.Window
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -20,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.updatePadding
+import com.github.b4ndithelps.wave.data.SavedPosition
 import com.github.b4ndithelps.wave.htmlstyling.StyleManager
 import com.github.b4ndithelps.wave.htmlstyling.ThemeType
 import nl.siegmann.epublib.domain.Book
@@ -57,6 +60,16 @@ class EpubReaderActivity : AppCompatActivity() {
 
     // A cache that enables quick access to the images in the ePub
     private val imageCache = ConcurrentHashMap<String, ByteArray>()
+
+    // Page Management
+    private var currentPageIndex = 0  // Current page within a spine
+    private var totalPages = 1        // Total pages in the current spine
+    private var pageOffsetY = 0       // Current vertical offset of the page
+    private var pageHeight = 0        // Height of the "page" in pixels
+
+    private var pagePositionsMap = mutableMapOf<Int, MutableList<Float>>() // Maps a page index to a list of page positions
+
+    private var savedPosition: SavedPosition? = null
 
     /**
      * onCreate is called when the activity is first launched. It is used to setyp the menus,
@@ -208,6 +221,8 @@ class EpubReaderActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
 
+                pageHeight = epubWebView.height
+
                 // Inject JavaScript to handle the tall stuff
                 view?.evaluateJavascript("""
                     document.querySelectorAll('img').forEach(img => {
@@ -221,6 +236,29 @@ class EpubReaderActivity : AppCompatActivity() {
                             img.classList.add('tall');
                         }
                     });
+                    
+                    // Calculate pages based on content height and viewport height
+                    function calculatePages() {
+                        const pageHeight = ${pageHeight};
+                        const contentHeight = document.body.scrollHeight;
+                        const pageCount = Math.ceil(contentHeight / pageHeight);
+                        
+                        // Generate list of scroll positions for each page
+                        let pagePositions = [];
+                        for (let i = 0; i < pageCount; i++) {
+                            pagePositions.push(i * pageHeight);
+                        }
+                        
+                        // Send page information back to Android
+                        PageCalculator.onPageCalculationComplete(pageCount, pagePositions.join(','));
+                    }
+                    
+                    // Calculate once everything is loaded
+                    window.onload = calculatePages;
+                    
+                    // Also calculate now in case onload already fired
+                    calculatePages();
+                    
                 """.trimIndent(), null)
             }
         }
@@ -233,11 +271,27 @@ class EpubReaderActivity : AppCompatActivity() {
                     val x = e.x
                     val width = epubWebView.width
                     if (x < width / 3) {
-                        // Left side
-                        goToPreviousPage()
+                        // Left side - go to previous page
+                        if (currentPageIndex > 0) {
+                            currentPageIndex--
+                            scrollToPage(currentPageIndex)
+                        } else {
+                            // If at first page of spine, go to previous spine
+                            if (currentSpineIndex > 0) {
+                                goToPreviousSpine()
+                            }
+                        }
                     } else if (x > 2 * width / 3) {
-                        // Right side
-                        goToNextPage()
+                        // Right side - go to next page
+                        if (currentPageIndex < totalPages - 1) {
+                            currentPageIndex++
+                            scrollToPage(currentPageIndex)
+                        } else {
+                            // If at last page of spine, go to next spine
+                            if (currentSpineIndex < epubBook.spine.spineReferences.size - 1) {
+                                goToNextSpine()
+                            }
+                        }
                     } else {
                         toggleMenu()
                     }
@@ -250,6 +304,31 @@ class EpubReaderActivity : AppCompatActivity() {
             false
         }
 
+
+        // Begin of the pagification process - turning spines into pages
+        epubWebView.addJavascriptInterface(object: Any() {
+            @JavascriptInterface
+            fun onPageCalculationComplete(pageCount: Int, pagePositions: String) {
+                runOnUiThread {
+                    totalPages = pageCount
+                    val positions = pagePositions.split(",").map { it.toFloat() }
+                    pagePositionsMap[currentSpineIndex] = positions.toMutableList()
+
+                    // If there are already saved positions, load them
+                    // Otherwise start at the beginning of the spine
+                    if (savedPosition != null && savedPosition!!.spineIndex == currentSpineIndex) {
+                        currentPageIndex = savedPosition!!.pageIndex
+                        scrollToPage(currentPageIndex)
+                    } else {
+                        currentPageIndex = 0
+                        scrollToPage(0)
+                    }
+
+                    // Update UI with page info
+                    updatePageInfo()
+                }
+            }
+        }, "PageCalculator")
 
     }
 
@@ -321,10 +400,17 @@ class EpubReaderActivity : AppCompatActivity() {
             val epubReader = EpubReader()
             epubBook = epubReader.readEpub(FileInputStream(bookPath))
 
+            loadSavedPosition()
+
             // Get the first chapter (spine element)
             val spine = epubBook.spine.spineReferences
             if (spine.isNotEmpty()) {
-                currentSpineIndex = 0
+                if (savedPosition != null) {
+                    currentSpineIndex = savedPosition!!.spineIndex
+                } else {
+                    currentSpineIndex = 0
+                }
+
                 loadSpineItem(currentSpineIndex)
             } else {
                 // Handle the case where there are no spine elements
@@ -368,17 +454,96 @@ class EpubReaderActivity : AppCompatActivity() {
     }
 
     private fun goToPreviousPage() {
-        if (currentSpineIndex > 0) {
-            currentSpineIndex--
-            loadSpineItem(currentSpineIndex)
+        if (currentPageIndex > 0) {
+            currentPageIndex--
+            scrollToPage(currentPageIndex)
+        } else {
+            if (currentSpineIndex > 0) {
+                goToPreviousSpine()
+            }
         }
     }
 
     private fun goToNextPage() {
-        val spine = epubBook.spine.spineReferences
-        if (currentSpineIndex < spine.size - 1) {
+        if (currentPageIndex < totalPages - 1) {
+            currentPageIndex++
+            scrollToPage(currentPageIndex)
+        } else {
+            goToNextSpine()
+        }
+    }
+
+    private fun scrollToPage(pageIndex: Int) {
+        if (pagePositionsMap.containsKey(currentSpineIndex)) {
+            val positions = pagePositionsMap[currentSpineIndex]
+            if (positions != null && pageIndex < positions.size) {
+                val yOffset = positions[pageIndex]
+                epubWebView.scrollTo(0, yOffset.toInt())
+                currentPageIndex = pageIndex
+                updatePageInfo()
+
+                // Save the current position
+                saveReaderPosition()
+            }
+        }
+    }
+
+    private fun updatePageInfo() {
+        // Update UI with currentPage / total pages
+        // TODO
+    }
+
+    private fun goToNextSpine() {
+        if (currentSpineIndex < epubBook.spine.spineReferences.size - 1) {
             currentSpineIndex++
+            currentPageIndex = 0 // Reset to the first page
             loadSpineItem(currentSpineIndex)
+        }
+    }
+
+    private fun goToPreviousSpine() {
+        if (currentSpineIndex > 0) {
+            currentSpineIndex--
+            loadSpineItem(currentSpineIndex)
+            // When onPageFinished runs, it will calculate pages and put us on the last page
+        }
+    }
+
+    // Save position function
+    private fun saveReaderPosition() {
+        val bookId = epubBook.title ?: "unknown_book"
+        val position = SavedPosition(currentSpineIndex, currentPageIndex)
+
+        val sharedPrefs = getSharedPreferences("epub_reader_prefs", Context.MODE_PRIVATE)
+        val editor = sharedPrefs.edit()
+
+        // Convert position to JSON or string format
+        val positionJson = "{\"spineIndex\":${position.spineIndex},\"pageIndex\":${position.pageIndex}}"
+        editor.putString("position_$bookId", positionJson)
+        editor.apply()
+    }
+
+    // Load position function - call this in your loadEpub method
+    private fun loadSavedPosition() {
+        val bookId = epubBook.title ?: "unknown_book"
+        val sharedPrefs = getSharedPreferences("epub_reader_prefs", Context.MODE_PRIVATE)
+        val positionJson = sharedPrefs.getString("position_$bookId", null)
+
+        if (positionJson != null) {
+            try {
+                // Simple JSON parsing
+                val spineIndex = Regex("\"spineIndex\":(\\d+)").find(positionJson)?.groupValues?.get(1)?.toInt() ?: 0
+                val pageIndex = Regex("\"pageIndex\":(\\d+)").find(positionJson)?.groupValues?.get(1)?.toInt() ?: 0
+
+                savedPosition = SavedPosition(spineIndex, pageIndex)
+
+                // Set the current spine index
+                currentSpineIndex = spineIndex
+                // Note: The page index will be applied after page calculation in onPageFinished
+            } catch (e: Exception) {
+                e.printStackTrace()
+                savedPosition = null
+            }
         }
     }
 
