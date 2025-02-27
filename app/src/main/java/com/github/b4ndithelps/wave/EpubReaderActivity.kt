@@ -70,6 +70,7 @@ class EpubReaderActivity : AppCompatActivity() {
     private var pagePositionsMap = mutableMapOf<Int, MutableList<Float>>() // Maps a page index to a list of page positions
 
     private var savedPosition: SavedPosition? = null
+    private var goToLastPageWhenLoaded = false
 
     /**
      * onCreate is called when the activity is first launched. It is used to setyp the menus,
@@ -263,41 +264,29 @@ class EpubReaderActivity : AppCompatActivity() {
             }
         }
 
+        epubWebView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+            // Calculate current page based on scroll position
+            updateCurrentPageFromScroll(scrollY)
+        }
+
 
         // Setup the page turning mechanism
-        gestureDetector = GestureDetector(this, object : GestureDetector
-            .SimpleOnGestureListener() {
-                override fun onSingleTapUp(e: MotionEvent): Boolean {
-                    val x = e.x
-                    val width = epubWebView.width
-                    if (x < width / 3) {
-                        // Left side - go to previous page
-                        if (currentPageIndex > 0) {
-                            currentPageIndex--
-                            scrollToPage(currentPageIndex)
-                        } else {
-                            // If at first page of spine, go to previous spine
-                            if (currentSpineIndex > 0) {
-                                goToPreviousSpine()
-                            }
-                        }
-                    } else if (x > 2 * width / 3) {
-                        // Right side - go to next page
-                        if (currentPageIndex < totalPages - 1) {
-                            currentPageIndex++
-                            scrollToPage(currentPageIndex)
-                        } else {
-                            // If at last page of spine, go to next spine
-                            if (currentSpineIndex < epubBook.spine.spineReferences.size - 1) {
-                                goToNextSpine()
-                            }
-                        }
-                    } else {
-                        toggleMenu()
-                    }
-                    return true
+        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                val x = e.x
+                val width = epubWebView.width
+                if (x < width / 3) {
+                    // Left side - go to previous page
+                    goToPreviousPage()  // Use our consolidated function
+                } else if (x > 2 * width / 3) {
+                    // Right side - go to next page
+                    goToNextPage()  // Use our consolidated function
+                } else {
+                    toggleMenu()
                 }
-            })
+                return true
+            }
+        })
 
         epubWebView.setOnTouchListener { _, event ->
             gestureDetector.onTouchEvent(event)
@@ -314,9 +303,12 @@ class EpubReaderActivity : AppCompatActivity() {
                     val positions = pagePositions.split(",").map { it.toFloat() }
                     pagePositionsMap[currentSpineIndex] = positions.toMutableList()
 
-                    // If there are already saved positions, load them
-                    // Otherwise start at the beginning of the spine
-                    if (savedPosition != null && savedPosition!!.spineIndex == currentSpineIndex) {
+                    if (goToLastPageWhenLoaded) {
+                        // Go to the last page
+                        currentPageIndex = totalPages - 1
+                        scrollToPage(currentPageIndex)
+                        goToLastPageWhenLoaded = false
+                    } else if (savedPosition != null && savedPosition!!.spineIndex == currentSpineIndex) {
                         currentPageIndex = savedPosition!!.pageIndex
                         scrollToPage(currentPageIndex)
                     } else {
@@ -324,7 +316,6 @@ class EpubReaderActivity : AppCompatActivity() {
                         scrollToPage(0)
                     }
 
-                    // Update UI with page info
                     updatePageInfo()
                 }
             }
@@ -488,6 +479,27 @@ class EpubReaderActivity : AppCompatActivity() {
         }
     }
 
+    // New function to update page number based on scroll position
+    private fun updateCurrentPageFromScroll(scrollY: Int) {
+        if (pagePositionsMap.containsKey(currentSpineIndex)) {
+            val positions = pagePositionsMap[currentSpineIndex] ?: return
+
+            // Find which page we're currently on based on scroll position
+            for (i in positions.indices) {
+                val position = positions[i].toInt()
+                // If this is the last position or the scroll is before the next position
+                if (i == positions.size - 1 || scrollY < positions[i + 1].toInt()) {
+                    if (currentPageIndex != i) {
+                        currentPageIndex = i
+                        updatePageInfo()
+                        saveReaderPosition()
+                    }
+                    break
+                }
+            }
+        }
+    }
+
     private fun updatePageInfo() {
         // Update UI with currentPage / total pages
         // TODO
@@ -501,11 +513,14 @@ class EpubReaderActivity : AppCompatActivity() {
         }
     }
 
+    // Modify goToPreviousSpine() to go to the last page of previous spine
     private fun goToPreviousSpine() {
         if (currentSpineIndex > 0) {
             currentSpineIndex--
             loadSpineItem(currentSpineIndex)
-            // When onPageFinished runs, it will calculate pages and put us on the last page
+
+            // Set a flag to indicate we want to go to the last page when loaded
+            goToLastPageWhenLoaded = true
         }
     }
 
