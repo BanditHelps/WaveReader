@@ -4,15 +4,9 @@ import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Build
-import androidx.lifecycle.lifecycleScope
-import com.github.b4ndithelps.wave.data.AppDatabase
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
@@ -37,21 +31,30 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.core.view.GravityCompat
 import androidx.core.view.updatePadding
 import androidx.drawerlayout.widget.DrawerLayout
-import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import com.github.b4ndithelps.wave.adapter.SpotifyPlaylistAdapter
+import com.github.b4ndithelps.wave.data.AppDatabase
 import com.github.b4ndithelps.wave.data.SavedPosition
 import com.github.b4ndithelps.wave.htmlstyling.StyleManager
 import com.github.b4ndithelps.wave.htmlstyling.ThemeType
-import com.github.b4ndithelps.wave.model.SpotifyPlaylist
-import com.github.b4ndithelps.wave.model.SpotifyTrack
-import com.github.b4ndithelps.wave.spotify.SpotifyManager
+import com.github.b4ndithelps.wave.spotify.SpotManager
+import com.github.b4ndithelps.wave.spotify.SpotifyAuthConfig
+import com.github.b4ndithelps.wave.spotify.SpotifyAuthConfig.REDIRECT_URI
+import com.spotify.sdk.android.auth.AuthorizationClient
+import com.spotify.sdk.android.auth.AuthorizationRequest
+import com.spotify.sdk.android.auth.AuthorizationResponse
+import com.spotify.sdk.android.auth.LoginActivity.REQUEST_CODE
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import nl.siegmann.epublib.domain.Book
 import nl.siegmann.epublib.domain.Resource
 import nl.siegmann.epublib.epub.EpubReader
 import java.io.ByteArrayInputStream
 import java.io.FileInputStream
 import java.util.concurrent.ConcurrentHashMap
+
 
 /**
  * Enhanced EpubReaderActivity with Spotify integration
@@ -109,7 +112,7 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     private lateinit var progressText: TextView
 
     // Spotify related components
-    private lateinit var spotifyManager: SpotifyManager
+//    private lateinit var spotifyManager: SpotifyManager
     private lateinit var playlistsRecyclerView: RecyclerView
     private lateinit var playlistAdapter: SpotifyPlaylistAdapter
     private lateinit var playlistSearchEditText: EditText
@@ -132,6 +135,11 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     private var isPlaylistPanelOpen = false
     private var isSystemUIVisible = true
 
+//    private lateinit var spotifyAuthLauncher: ActivityResultLauncher<Intent>
+//    private lateinit var
+    private lateinit var spotManager: SpotManager
+    private val REQUEST_CODE: Int = 1337 // Request code will be used to verify if result comes from the login activity. Can be set to any integer.
+
     /**
      * onCreate is called when the activity is first launched. It is used to setup the menus,
      * configure the webView, and load the book with any modifications.
@@ -140,12 +148,23 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_epub_reader)
 
+//        spotifyAuthLauncher = registerForActivityResult(
+//            ActivityResultContracts.StartActivityForResult()
+//        ) { result ->
+//            // Handle authentication result
+//            spotifyManager.handleAuthResponse(
+//                SpotifyAuthConfig.REQUEST_CODE,
+//                result.resultCode,
+//                result.data
+//            )
+//        }
+
         // Initialize Spotify Manager
-        spotifyManager = SpotifyManager()
+        spotManager = SpotManager(this)
 
         initializeGUIComponents()
         configureMenus()
-        configureSpotifyComponents()
+//        configureSpotifyComponents()
 
         hideSystemUI()
 
@@ -164,6 +183,27 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
                 prepareAndLoadBook(bookPath)
             }
         }
+
+
+
+
+        val builder: AuthorizationRequest.Builder =
+            AuthorizationRequest.Builder(SpotifyAuthConfig.CLIENT_ID, AuthorizationResponse.Type.CODE, REDIRECT_URI)
+
+        builder.setScopes(arrayOf("streaming"))
+        val request: AuthorizationRequest = builder.build()
+
+        AuthorizationClient.openLoginActivity(this, REQUEST_CODE, request)
+
+        spotManager.authenticate()
+
+        // Start the auth process
+//        if (!spotifyManager.isAuthenticated()) {
+//            window.decorView.post {
+//                spotifyManager.authenticate(spotifyAuthLauncher)
+//            }
+//        }
+
     }
 
 
@@ -221,120 +261,175 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     /**
      * Configures Spotify-related components and sets up listeners
      */
-    private fun configureSpotifyComponents() {
-        // Set up the playlist RecyclerView
-        playlistsRecyclerView.layoutManager = LinearLayoutManager(this)
-        playlistAdapter = SpotifyPlaylistAdapter(spotifyManager.getPlaylists()) { playlist ->
-            // Handle playlist selection
-            spotifyManager.playPlaylist(playlist.id)
-            // Close the drawer when a playlist is selected
-            drawerLayout.closeDrawer(GravityCompat.END)
-        }
-        playlistsRecyclerView.adapter = playlistAdapter
-        
-        // Set up search functionality
-        playlistSearchEditText.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val query = s.toString()
-                val filteredPlaylists = spotifyManager.searchPlaylists(query)
-                playlistAdapter.updatePlaylists(filteredPlaylists)
-            }
-            
-            override fun afterTextChanged(s: Editable?) {}
-        })
-        
-        // Set up player state change listener
-        spotifyManager.setPlayerStateChangeListener { isPlaying, track ->
-            updatePlayerUI(isPlaying, track)
-        }
-        
-        // Set up control buttons in the main player
-        playPauseButton.setOnClickListener {
-            spotifyManager.togglePlayPause()
-        }
-        
-        nextButton.setOnClickListener {
-            spotifyManager.skipToNext()
-        }
-        
-        previousButton.setOnClickListener {
-            spotifyManager.skipToPrevious()
-        }
-        
-        playlistButton.setOnClickListener {
-            togglePlaylistPanel()
-        }
-        
-        // Set up mini player controls
-        miniPlayPauseButton.setOnClickListener {
-            spotifyManager.togglePlayPause()
-        }
-        
-        // Set up close button for playlist panel
-        findViewById<ImageButton>(R.id.closePlaylistButton).setOnClickListener {
-            drawerLayout.closeDrawer(GravityCompat.END)
-        }
-        
-        // Update UI when drawer state changes
-        drawerLayout.addDrawerListener(object : DrawerLayout.DrawerListener {
-            override fun onDrawerSlide(drawerView: View, slideOffset: Float) {}
-            
-            override fun onDrawerOpened(drawerView: View) {
-                isPlaylistPanelOpen = true
-                showSystemUI()
-            }
-            
-            override fun onDrawerClosed(drawerView: View) {
-                isPlaylistPanelOpen = false
-                if (!isMenuVisible) {
-                    hideSystemUI()
-                }
-            }
-            
-            override fun onDrawerStateChanged(newState: Int) {}
-        })
-        
-        // Initialize with current Spotify state if available
-        updatePlayerUI(spotifyManager.isPlaying(), spotifyManager.getCurrentTrack())
-        spotifyManager.getCurrentPlaylist()?.let { playlist ->
-            playlistAdapter.setCurrentPlayingPlaylist(playlist.id)
-        }
+//    private fun configureSpotifyComponents() {
+//        // Set up the playlist RecyclerView
+//        playlistsRecyclerView.layoutManager = LinearLayoutManager(this)
+//
+//        // Start with empty list, will get updated on authentication
+//        playlistAdapter = SpotifyPlaylistAdapter(emptyList()) { playlist ->
+//            // Handle playlist selection
+//            spotifyManager.playPlaylist(playlist.id)
+//            // Close the drawer when a playlist is selected
+//            drawerLayout.closeDrawer(GravityCompat.END)
+//
+//            // Show loading toast
+//            Toast.makeText(this, "Loading playlist: ${playlist.name}", Toast.LENGTH_SHORT).show()
+//        }
+//        playlistsRecyclerView.adapter = playlistAdapter
+//
+//        // Set up search functionality
+//        playlistSearchEditText.addTextChangedListener(object : TextWatcher {
+//            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+//
+//            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+//                val query = s.toString()
+//
+//                lifecycleScope.launch {
+//                    val searchResults = withContext(Dispatchers.IO) {
+//                        spotifyManager.searchPlaylists(query)
+//                    }
+//                    playlistAdapter.updatePlaylists(searchResults)
+//                }
+//            }
+//
+//            override fun afterTextChanged(s: Editable?) {}
+//        })
+//
+//        // Set up player state change listener
+//        spotifyManager.setPlayerStateChangeListener { isPlaying, track ->
+//            updatePlayerUI(isPlaying, track)
+//        }
+//
+//        // Set up control buttons in the main player
+//        playPauseButton.setOnClickListener {
+//            spotifyManager.togglePlayPause()
+//        }
+//
+//        nextButton.setOnClickListener {
+//            spotifyManager.skipToNext()
+//        }
+//
+//        previousButton.setOnClickListener {
+//            spotifyManager.skipToPrevious()
+//        }
+//
+//        playlistButton.setOnClickListener {
+//            togglePlaylistPanel()
+//        }
+//
+//        // Set up mini player controls
+//        miniPlayPauseButton.setOnClickListener {
+//            spotifyManager.togglePlayPause()
+//        }
+//
+//        // Set up close button for playlist panel
+//        findViewById<ImageButton>(R.id.closePlaylistButton).setOnClickListener {
+//            drawerLayout.closeDrawer(GravityCompat.END)
+//        }
+//
+//        // Update UI when drawer state changes
+//        drawerLayout.addDrawerListener(object : DrawerLayout.DrawerListener {
+//            override fun onDrawerSlide(drawerView: View, slideOffset: Float) {}
+//
+//            override fun onDrawerOpened(drawerView: View) {
+//                isPlaylistPanelOpen = true
+//                showSystemUI()
+//
+//                // Refresh playlists when drawer is open
+//                refreshPlaylists()
+//            }
+//
+//            override fun onDrawerClosed(drawerView: View) {
+//                isPlaylistPanelOpen = false
+//                if (!isMenuVisible) {
+//                    hideSystemUI()
+//                }
+//            }
+//
+//            override fun onDrawerStateChanged(newState: Int) {}
+//        })
+//
+//        // Initialize with current Spotify state if available
+//        updatePlayerUI(spotifyManager.isPlaying(), spotifyManager.getCurrentTrack())
+//        spotifyManager.getCurrentPlaylist()?.let { playlist ->
+//            playlistAdapter.setCurrentPlayingPlaylist(playlist.id)
+//        }
+//    }
+
+    /**
+     * Refresh playlists from Spotify
+     */
+    private fun refreshPlaylists() {
+//        lifecycleScope.launch {
+//            try {
+//                val playlists = withContext(Dispatchers.IO) {
+//                    spotifyManager.fetchUserPlaylists()
+//                }
+//                playlistAdapter.updatePlaylists(playlists)
+//            } catch (e: Exception) {
+//                Toast.makeText(
+//                    this@SpotifyEpubReaderActivity,
+//                    "Failed to load playlists: ${e.message}",
+//                    Toast.LENGTH_SHORT
+//                ).show()
+//            }
+//        }
     }
     
     /**
      * Updates the UI of both the main player and mini player
      */
-    private fun updatePlayerUI(isPlaying: Boolean, track: SpotifyTrack?) {
-        // Update play/pause button icons
-        val playPauseIcon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-        playPauseButton.setImageResource(playPauseIcon)
-        miniPlayPauseButton.setImageResource(playPauseIcon)
-        
-        // Update track info if available
-        if (track != null) {
-            trackNameTextView.text = track.name
-            artistNameTextView.text = track.artist
-            miniTrackNameTextView.text = track.name
-            miniArtistNameTextView.text = track.artist
-            
-            // In a real app, you would load album art with an image loading library
-            // Example: Glide.with(this).load(track.albumImageUrl).into(albumArtImageView)
-            // Example: Glide.with(this).load(track.albumImageUrl).into(miniAlbumArtImageView)
-        } else {
-            // No track is loaded
-            trackNameTextView.text = "No track selected"
-            artistNameTextView.text = "Select a playlist to start"
-            miniTrackNameTextView.text = "No track selected"
-            miniArtistNameTextView.text = "Select a playlist to start"
-        }
-        
-        // Update current playing playlist in the adapter
-        spotifyManager.getCurrentPlaylist()?.let { playlist ->
-            playlistAdapter.setCurrentPlayingPlaylist(playlist.id)
-        }
-    }
+//    private fun updatePlayerUI(isPlaying: Boolean, track: SpotifyTrack?) {
+//        // Update play/pause button icons
+//        val playPauseIcon = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+//        playPauseButton.setImageResource(playPauseIcon)
+//        miniPlayPauseButton.setImageResource(playPauseIcon)
+//
+//        // Update track info if available
+//        if (track != null) {
+//            trackNameTextView.text = track.name
+//            artistNameTextView.text = track.artist
+//            miniTrackNameTextView.text = track.name
+//            miniArtistNameTextView.text = track.artist
+//
+//            // In a real app, you would load album art with an image loading library
+//            // Example: Glide.with(this).load(track.albumImageUrl).into(albumArtImageView)
+//            // Example: Glide.with(this).load(track.albumImageUrl).into(miniAlbumArtImageView)
+//            // Load album art with Glide if URL is available
+//            if (track.albumImageUrl.isNotEmpty()) {
+//                Glide.with(this)
+//                    .load(track.albumImageUrl)
+//                    .placeholder(R.drawable.ic_album_placeholder)
+//                    .error(R.drawable.ic_album_placeholder)
+//                    .into(albumArtImageView)
+//
+//                Glide.with(this)
+//                    .load(track.albumImageUrl)
+//                    .placeholder(R.drawable.ic_album_placeholder)
+//                    .error(R.drawable.ic_album_placeholder)
+//                    .into(miniAlbumArtImageView)
+//            } else {
+//                // Use placeholder if no album art
+//                albumArtImageView.setImageResource(R.drawable.ic_album_placeholder)
+//                miniAlbumArtImageView.setImageResource(R.drawable.ic_album_placeholder)
+//            }
+//        } else {
+//            // No track is loaded
+//            trackNameTextView.text = "No track selected"
+//            artistNameTextView.text = "Select a playlist to start"
+//            miniTrackNameTextView.text = "No track selected"
+//            miniArtistNameTextView.text = "Select a playlist to start"
+//
+//            // Set placeholder
+//            albumArtImageView.setImageResource(R.drawable.ic_album_placeholder)
+//            miniAlbumArtImageView.setImageResource(R.drawable.ic_album_placeholder)
+//        }
+//
+//        // Update current playing playlist in the adapter
+//        spotifyManager.getCurrentPlaylist()?.let { playlist ->
+//            playlistAdapter.setCurrentPlayingPlaylist(playlist.id)
+//        }
+//    }
     
     /**
      * Toggles the playlist panel open/closed
@@ -1026,9 +1121,38 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
         val formattedSize = String.format("%.1f", currentFontSize)
         fontSizeText.text = "Font Size: $formattedSize px"
     }
+
+    override fun onStart() {
+        super.onStart()
+//        // Connect to Spotify App Remote if authenticated
+//        if (spotifyManager.isAuthenticated()) {
+//            spotifyManager.connectToSpotifyRemote()
+//        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+//        // Disconnect from Spotify App Remote
+//        spotifyManager.disconnect()
+    }
     
     override fun onDestroy() {
         super.onDestroy()
-        spotifyManager.removePlayerStateChangeListener()
+//        spotifyManager.removePlayerStateChangeListener()
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
+        super.onActivityResult(requestCode, resultCode, intent)
+
+        // Check if result comes from the correct activity
+        if (requestCode == REQUEST_CODE) {
+            val response = AuthorizationClient.getResponse(resultCode, intent)
+
+            when (response.type) {
+                AuthorizationResponse.Type.CODE -> {}
+                AuthorizationResponse.Type.ERROR -> {}
+                else -> {}
+            }
+        }
     }
 }

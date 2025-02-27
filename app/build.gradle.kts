@@ -56,14 +56,22 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.glide)
     implementation(libs.androidx.cardview)
+    implementation(libs.android.auth)
+    implementation(libs.androidx.browser)
+    implementation(libs.appcompat)
+
     implementation("nl.siegmann.epublib:epublib-core:3.1") {
         exclude(group = "xmlpull", module = "xmlPull")
         exclude(group = "net.sf.kxml", module = "kxml2")
 
     }
+    implementation(libs.play.services.auth)
     val room_version = "2.6.1"
 
     implementation("androidx.room:room-runtime:$room_version")
+    implementation(project(":spotifylibs"))
+    implementation(libs.gson)
+
 
     // If this project uses any Kotlin source, use Kotlin Symbol Processing (KSP)
     // See Add the KSP plugin to your project

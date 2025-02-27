@@ -1,6 +1,9 @@
 [versions]
 agp = "8.8.1"
+authVersion = "1.2.5"
+browser = "1.8.0"
 cardview = "1.0.0"
+gson = "2.10.1"
 kotlin = "2.0.0"
 coreKtx = "1.10.1"
 junit = "4.13.2"
@@ -18,10 +21,15 @@ compiler = "4.16.0"
 epublibCore = "4.1"
 roomRuntime = "2.5.1"
 roomKtx = "2.5.1"
+playServicesAuth = "21.3.0"
 
 [libraries]
+android-auth = { module = "com.spotify.android:auth", version.ref = "authVersion" }
+androidx-browser = { module = "androidx.browser:browser", version.ref = "browser" }
 androidx-cardview = { module = "androidx.cardview:cardview", version.ref = "cardview" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+appcompat = { module = "androidx.appcompat:appcompat" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -44,6 +52,7 @@ compiler = { group = "com.github.bumptech.glide", name = "compiler", version.ref
 epublib-core = { group = "nl.siegmann.epublib", name = "epublib-core", version.ref = "epublibCore" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "roomRuntime" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomKtx" }
+play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

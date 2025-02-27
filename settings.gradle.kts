@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Wave Reader"
 include(":app")
+include(":spotifylibs")
