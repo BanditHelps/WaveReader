@@ -59,6 +59,8 @@ dependencies {
     implementation(libs.android.auth)
     implementation(libs.androidx.browser)
     implementation(libs.appcompat)
+    // import retrofit2
+    implementation(libs.retrofit)
 
     implementation("nl.siegmann.epublib:epublib-core:3.1") {
         exclude(group = "xmlpull", module = "xmlPull")

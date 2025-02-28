@@ -19,6 +19,7 @@ constraintlayout = "2.1.4"
 glide = "4.16.0"
 compiler = "4.16.0"
 epublibCore = "4.1"
+retrofit = "2.9.0"
 roomRuntime = "2.5.1"
 roomKtx = "2.5.1"
 playServicesAuth = "21.3.0"
@@ -53,6 +54,7 @@ epublib-core = { group = "nl.siegmann.epublib", name = "epublib-core", version.r
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "roomRuntime" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomKtx" }
 play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
+retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

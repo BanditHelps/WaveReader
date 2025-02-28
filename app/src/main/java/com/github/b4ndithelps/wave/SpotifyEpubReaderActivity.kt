@@ -1132,6 +1132,7 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        spotManager.disconnect()
 //        // Disconnect from Spotify App Remote
 //        spotifyManager.disconnect()
     }
