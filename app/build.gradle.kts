@@ -61,6 +61,8 @@ dependencies {
     implementation(libs.appcompat)
     // import retrofit2
     implementation(libs.retrofit)
+    implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
 
     implementation("nl.siegmann.epublib:epublib-core:3.1") {
         exclude(group = "xmlpull", module = "xmlPull")

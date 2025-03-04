@@ -9,6 +9,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.github.b4ndithelps.wave.R
 import com.github.b4ndithelps.wave.model.SpotifyPlaylist
 
+/**
+ * Here is where the playlists are stored
+ */
 class SpotifyPlaylistAdapter(
     private var playlists: List<SpotifyPlaylist>,
     private val onPlaylistSelected: (SpotifyPlaylist) -> Unit

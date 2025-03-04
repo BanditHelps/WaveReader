@@ -5,8 +5,11 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
@@ -14,6 +17,7 @@ import android.view.Window
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.webkit.JavascriptInterface
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -25,6 +29,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -41,7 +46,6 @@ import com.github.b4ndithelps.wave.htmlstyling.ThemeType
 import com.github.b4ndithelps.wave.model.SpotifyTrack
 import com.github.b4ndithelps.wave.spotify.SpotManager
 import com.github.b4ndithelps.wave.spotify.SpotifyAuthConfig
-import com.github.b4ndithelps.wave.spotify.SpotifyAuthConfig.REDIRECT_URI
 import com.spotify.sdk.android.auth.AuthorizationClient
 import com.spotify.sdk.android.auth.AuthorizationRequest
 import com.spotify.sdk.android.auth.AuthorizationResponse
@@ -55,6 +59,11 @@ import nl.siegmann.epublib.epub.EpubReader
 import java.io.ByteArrayInputStream
 import java.io.FileInputStream
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.delay
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
+import java.util.UUID
 
 
 /**
@@ -125,6 +134,8 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     private lateinit var nextButton: ImageButton
     private lateinit var previousButton: ImageButton
     private lateinit var playlistButton: ImageButton
+
+    private lateinit var spotAuthWebView: WebView
     
     // Mini player in the playlist panel
     private lateinit var miniAlbumArtImageView: ImageView
@@ -137,6 +148,7 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
 
     private lateinit var spotManager: SpotManager
     private val REQUEST_CODE: Int = 1337 // Request code will be used to verify if result comes from the login activity. Can be set to any integer.
+    private var isAuthInProgress = false
 
     /**
      * onCreate is called when the activity is first launched. It is used to setup the menus,
@@ -145,6 +157,9 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_epub_reader)
+
+        // Restore authentication state if the activity is recreated
+//        isAuthInProgress = savedInstanceState?.getBoolean("AUTH_IN_PROGRESS") ?: false
 
         // Initialize Spotify Manager
         spotManager = SpotManager(this)
@@ -171,18 +186,172 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
             }
         }
 
+//        val builder: AuthorizationRequest.Builder =
+//            AuthorizationRequest.Builder(SpotifyAuthConfig.CLIENT_ID, AuthorizationResponse.Type.CODE, REDIRECT_URI)
+//
+//        builder.setScopes(arrayOf("streaming"))
+//        val request: AuthorizationRequest = builder.build()
+
+//        AuthorizationClient.openLoginActivity(this, REQUEST_CODE, request)
+
+//        if (!isAuthInProgress) {
+//            handleIncomingIntent(intent)
+//        }
+
+        checkSpotifyAuthentication()
 
 
+    }
 
-        val builder: AuthorizationRequest.Builder =
-            AuthorizationRequest.Builder(SpotifyAuthConfig.CLIENT_ID, AuthorizationResponse.Type.CODE, REDIRECT_URI)
+    private fun checkSpotifyAuthentication() {
+        // Check if already authenticated with App Remote and Web API
+        if (spotManager.isRemoteAuthenticated() && spotManager.isWebApiAuthenticated()) {
+            // Proceed with Spotify stuff
+            initializeSpotifyFunctionality()
+        } else {
+            // Start the authentication process
+            initiateSpotifyAuthentication()
+        }
+    }
 
-        builder.setScopes(arrayOf("streaming"))
-        val request: AuthorizationRequest = builder.build()
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun initiateSpotifyAuthentication() {
+        // Generate a random state
+        val state = UUID.randomUUID().toString()
 
-        AuthorizationClient.openLoginActivity(this, REQUEST_CODE, request)
+        // Construct the authorization URL using SpotifyAuthConfig
+        val authUrl = Uri.parse(SpotifyAuthConfig.AUTHORIZATION_URL).buildUpon()
+            .appendQueryParameter("client_id", SpotifyAuthConfig.CLIENT_ID)
+            .appendQueryParameter("response_type", "code")
+            .appendQueryParameter("redirect_uri", SpotifyAuthConfig.REDIRECT_URI)
+            .appendQueryParameter("scope", SpotifyAuthConfig.SCOPES)
+            .appendQueryParameter("show_dialog", "true")  // Force account selection
+            .build()
 
+        Log.d("SpotifyAuth", "Authentication URL: ${authUrl}")
+
+        // Setup WebView for authentication
+        spotAuthWebView = findViewById(R.id.spotifyAuthWebView)
+
+        spotAuthWebView.visibility = View.VISIBLE
+
+        spotAuthWebView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            loadWithOverviewMode = true
+            useWideViewPort = true
+        }
+
+        spotAuthWebView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url.toString()
+
+                // Check if the url matches our redirect URI
+                if (url.startsWith(SpotifyAuthConfig.REDIRECT_URI)) {
+                    val uri = Uri.parse(url)
+                    val code = uri.getQueryParameter("code")
+                    val returnedState = uri.getQueryParameter("state")
+
+                    // Validate state to prevent CSRF
+                    if (returnedState == state && code != null) {
+                        // Exchange authorization code for tokens
+                        exchangeCodeForTokens(code)
+                    }
+                    return true
+                }
+                return false
+            }
+
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                super.onPageStarted(view, url, favicon)
+                Log.d("SpotifyAuth", "Page started loading: $url")
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                Log.d("SpotifyAuth", "Page finished loading: $url")
+            }
+
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                super.onReceivedError(view, request, error)
+                Log.e("SpotifyAuth", "WebView error: ${error?.description}")
+            }
+        }
+
+        // Load the Spotify Authorizaton Page
+        spotAuthWebView.loadUrl(authUrl.toString())
+    }
+
+    private fun exchangeCodeForTokens(authorizationCode: String) {
+        lifecycleScope.launch {
+            try {
+                val client = OkHttpClient()
+
+                val requestBody = okhttp3.FormBody.Builder()
+                    .add("grant_type", "authorization_code")
+                    .add("code", authorizationCode)
+                    .add("redirect_uri", SpotifyAuthConfig.REDIRECT_URI)
+                    .add("client_id", SpotifyAuthConfig.CLIENT_ID)
+                    .add("client_secret", SpotifyAuthConfig.CLIENT_SECRET)
+                    .build()
+
+                val request = Request.Builder()
+                    .url(SpotifyAuthConfig.AUTH_TOKEN_URL)
+                    .post(requestBody)
+                    .build()
+
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string()
+
+                if (response.isSuccessful && responseBody != null) {
+                    val tokenResponse = JSONObject(responseBody)
+                    val accessToken = tokenResponse.getString("access_token")
+                    val refreshToken = tokenResponse.optString("refresh_token", null)
+                    val expiresIn = tokenResponse.getInt("expires_in")
+
+                    // Process the token response
+                    processTokenResponse(accessToken, refreshToken, expiresIn)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(this@SpotifyEpubReaderActivity, "Error exchanging Token", Toast.LENGTH_SHORT).show()
+                spotAuthWebView.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun processTokenResponse(accessToken: String, refreshToken: String?, expiresIn: Int) {
+        // hide the webview
+        spotAuthWebView.visibility = View.GONE
+
+        // Create an Intent to simulate the authentication response
+        // This will use the existing processAuthResponse method in SpotManager
+        val intent = Intent().apply {
+            putExtra("access_token", accessToken)
+            putExtra("refresh_token", refreshToken)
+            putExtra("expires_in", expiresIn)
+        }
+
+        // Call the existing method to process the authentication
+        spotManager.processAuthResponse(intent)
+
+        // Initialize the Spotify Functionality
+        initializeSpotifyFunctionality()
+    }
+
+    private fun initializeSpotifyFunctionality() {
         spotManager.authenticate()
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        // Handle potential redirect scenarios
+        intent?.data?.let { uri ->
+            if (uri.toString().startsWith(SpotifyAuthConfig.REDIRECT_URI)) {
+                // Process Callback if needed
+                spotManager.processAuthResponse(intent)
+            }
+        }
     }
 
 
@@ -264,9 +433,10 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
                 val query = s.toString()
 
                 if (query.isNotEmpty()) {
-                    // Search for playlists matching the query
-                    spotManager.searchPlaylists(query) { searchResults ->
-                        runOnUiThread {
+                    // Search for playlists matching the query using Web API
+                    lifecycleScope.launch {
+                        val searchResults = spotManager.searchPlaylists(query)
+                        withContext(Dispatchers.Main) {
                             playlistAdapter.updatePlaylists(searchResults)
                         }
                     }
@@ -349,8 +519,9 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
      * Refresh playlists from Spotify
      */
     private fun refreshPlaylists() {
-        spotManager.fetchPlaylists { playlists ->
-            runOnUiThread {
+        lifecycleScope.launch {
+            val playlists = spotManager.fetchPlaylists()
+            withContext(Dispatchers.Main) {
                 playlistAdapter.updatePlaylists(playlists)
             }
         }
@@ -1090,18 +1261,61 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
-        super.onActivityResult(requestCode, resultCode, intent)
+//    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {
+//        super.onActivityResult(requestCode, resultCode, intent)
+//
+//        if (requestCode == SpotifyAuthConfig.REQUEST_CODE) {
+//            val response = AuthorizationClient.getResponse(resultCode, intent)
+//
+//            when (response.type) {
+//                AuthorizationResponse.Type.CODE -> {
+//                    exchangeCodeForToken(response.code)
+//                }
+//                AuthorizationResponse.Type.TOKEN -> {
+//                    Toast.makeText(this, "Spotify authorization successful", Toast.LENGTH_SHORT).show()
+//                    isAuthInProgress = false
+//                }
+//                AuthorizationResponse.Type.ERROR -> {
+//                    Toast.makeText(this, "Spotify authorization failed: ${response.error}", Toast.LENGTH_SHORT).show()
+//                    isAuthInProgress = false
+//                }
+//                else -> {
+//                    Toast.makeText(this, "Spotify authorization canceled", Toast.LENGTH_SHORT).show()
+//                    isAuthInProgress = false
+//                }
+//            }
+//        }
+//    }
 
-        // Check if result comes from the correct activity
-        if (requestCode == REQUEST_CODE) {
-            val response = AuthorizationClient.getResponse(resultCode, intent)
+    private fun handleIncomingIntent(intent: Intent?) {
+        intent?.let {
+            // Prevent multiple authentication attempts
+            if (!isAuthInProgress) {
+                isAuthInProgress = true
 
-            when (response.type) {
-                AuthorizationResponse.Type.CODE -> {}
-                AuthorizationResponse.Type.ERROR -> {}
-                else -> {}
+                // Process authentication response
+                spotManager.processAuthResponse(it)
+
+                // Reset auth in progress after processing
+                lifecycleScope.launch {
+                    delay(1000)
+                    isAuthInProgress = false
+
+                    // Refresh playlists or perform post-auth actions
+                    refreshPlaylists()
+                }
+            }
+        } ?: run {
+            // If no intent, potentially start authentication
+            if (!isAuthInProgress) {
+                isAuthInProgress = true
+                spotManager.authenticate()
             }
         }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean("AUTH_IN_PROGRESS", isAuthInProgress)
     }
 }
