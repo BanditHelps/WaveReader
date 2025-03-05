@@ -171,6 +171,7 @@ interface SpotifyService {
  * Provides functionality for playback control, playlist management, and more
  */
 class SpotManager(private val context: Context) {
+    private var refreshToken: String? = null
     private var spotifyAppRemote: SpotifyAppRemote? = null
     private var authenticated: Boolean = false
     private var webApiAuthenticated: Boolean = false
@@ -180,6 +181,8 @@ class SpotManager(private val context: Context) {
     private var currentTrack: SpotifyTrack? = null
     private var currentPlaylist: SpotifyPlaylist? = null
     private var isPlaying: Boolean = false
+    private var authAttempted: Boolean = false
+    private var codeVerifier: String? = null
     
     // Retrofit client for Web API
     private lateinit var spotifyService: SpotifyService
@@ -189,7 +192,15 @@ class SpotManager(private val context: Context) {
     
     // Callback for when album art is loaded
     private var albumArtCallback: ((bitmap: Bitmap) -> Unit)? = null
-    
+
+    fun storeCodeVerifier(codeVerifier: String) {
+        this.codeVerifier = codeVerifier
+    }
+
+    fun getCodeVerifier(): String? {
+        return codeVerifier
+    }
+
     /**
      * Initiates the authentication process with Spotify
      * This will handle both App Remote and Web API authentication
@@ -200,6 +211,14 @@ class SpotManager(private val context: Context) {
         
         // Then authenticate with Web API for enhanced data access
         authenticateWebApi()
+    }
+
+    fun attemptedAuth(): Boolean {
+        return authAttempted
+    }
+
+    fun setAuthAttempted() {
+        authAttempted = true
     }
 
     // =============================
@@ -414,26 +433,33 @@ class SpotManager(private val context: Context) {
      * Process authentication response
      * Call this method from your activity's onNewIntent or similar method
      */
+    /**
+     * Process authentication response
+     * Call this method with the intent containing token information
+     */
     fun processAuthResponse(intent: Intent) {
-        val response = AuthorizationClient.getResponse(SpotifyAuthConfig.REQUEST_CODE, intent)
+        try {
+            // Extract tokens directly from the intent
+            val accessToken = intent.getStringExtra("access_token")
+            val refreshToken = intent.getStringExtra("refresh_token")
+            val expiresIn = intent.getIntExtra("expires_in", 0)
 
-        when (response.type) {
-            AuthorizationResponse.Type.TOKEN -> {
-                accessToken = response.accessToken
+            if (accessToken != null) {
+                this.accessToken = accessToken
+                this.refreshToken = refreshToken
                 webApiAuthenticated = true
+
                 Log.d("SpotManager", "Authenticated with Web API successfully!")
 
                 // Initialize Retrofit client with the token
-                initializeWebApiClient(accessToken!!)
-            }
-            AuthorizationResponse.Type.ERROR -> {
-                Log.e("SpotManager", "Auth error: ${response.error}")
+                initializeWebApiClient(accessToken)
+            } else {
+                Log.e("SpotManager", "No access token received")
                 webApiAuthenticated = false
             }
-            else -> {
-                Log.d("SpotManager", "Auth response: ${response.type}")
-                webApiAuthenticated = false
-            }
+        } catch (e: Exception) {
+            Log.e("SpotManager", "Error processing auth response", e)
+            webApiAuthenticated = false
         }
     }
     

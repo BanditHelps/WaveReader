@@ -20,6 +20,7 @@ import com.example.wave_reader.adapter.BookCoverAdapter
 import com.github.b4ndithelps.wave.data.AppDatabase
 import com.github.b4ndithelps.wave.data.BookData
 import com.github.b4ndithelps.wave.model.Book
+import com.github.b4ndithelps.wave.spotify.SpotManager
 import com.google.android.material.appbar.MaterialToolbar
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +55,8 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_home)
+
+        setupSpotifyAuthInApplication()
 
         // Locate all the elements we will need
         val toolbar : MaterialToolbar = findViewById(R.id.toolbar)
@@ -464,4 +467,11 @@ class HomeActivity : AppCompatActivity(), BookCoverAdapter.OnItemClickListener {
             // Trim spaces from start and end
             .trim()
     }
+
+    private fun setupSpotifyAuthInApplication() {
+        val app = application as WaveReaderApplication
+        app.spotifyManagerInstance = SpotManager(this)
+    }
+
+
 }
