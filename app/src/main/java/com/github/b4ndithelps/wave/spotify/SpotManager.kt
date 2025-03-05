@@ -183,6 +183,9 @@ class SpotManager(private val context: Context) {
     private var isPlaying: Boolean = false
     private var authAttempted: Boolean = false
     private var codeVerifier: String? = null
+    private var authUrl: Uri? = null
+
+    private var isProcessingAuthResponse: Boolean = false // tracks the callback progress
     
     // Retrofit client for Web API
     private lateinit var spotifyService: SpotifyService
@@ -199,6 +202,14 @@ class SpotManager(private val context: Context) {
 
     fun getCodeVerifier(): String? {
         return codeVerifier
+    }
+
+    fun setProcessingCallback(progress: Boolean) {
+        isProcessingAuthResponse = progress
+    }
+
+    fun getProcessingCallback(): Boolean {
+        return isProcessingAuthResponse
     }
 
     /**
@@ -729,5 +740,13 @@ class SpotManager(private val context: Context) {
         if (!authenticated) return
         
         spotifyAppRemote?.playerApi?.setShuffle(on)
+    }
+
+    fun saveAuthUrl(authUrl: Uri) {
+        this.authUrl = authUrl
+    }
+
+    fun loadAuthUrl(): Uri? {
+        return authUrl
     }
 }
