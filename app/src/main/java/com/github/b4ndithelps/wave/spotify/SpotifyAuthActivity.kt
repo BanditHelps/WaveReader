@@ -33,9 +33,10 @@ class SpotifyAuthActivity : AppCompatActivity() {
         Log.d("SpotifyAuth", "Oncreate of auth activity")
 
         if (authUrl != null) {
-            // Create the intent for the callback activity
+            // Create the intent for the callback activity with confirmation dialog
             val callbackIntent = Intent(this, SpotifyAuthCallbackActivity::class.java)
             callbackIntent.putExtra("SHOULD_CLOSE_TAB", true)
+            callbackIntent.putExtra("DISPLAY_CONFIRMATION", true)
 
             val pendingIntent = PendingIntent.getActivity(
                 this,
@@ -44,15 +45,19 @@ class SpotifyAuthActivity : AppCompatActivity() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            // Build and launch the custom tab
+            // Build and launch the custom tab with proper session management
             val customTabsIntent = CustomTabsIntent.Builder()
                 .setShowTitle(true)
+                .setShareState(CustomTabsIntent.SHARE_STATE_OFF) // Disable sharing option
                 .build()
-
-            // Attach the pending intent to the custom tab
+            // Set the pending intent for when auth completes
             customTabsIntent.intent.putExtra(CustomTabsIntent.EXTRA_SESSION, pendingIntent)
+            
+            // Add flags to ensure proper session management
+            customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+            customTabsIntent.intent.addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+            
             Log.d("SpotifyAuth", "launching new intent")
-
             customTabsIntent.launchUrl(this, authUrl)
         } else {
             Log.e("SpotifyAuth", "No Authentication Url found!")
@@ -90,6 +95,4 @@ class SpotifyAuthActivity : AppCompatActivity() {
         }
         finish()
     }
-
-
 }
