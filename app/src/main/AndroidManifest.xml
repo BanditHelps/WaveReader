@@ -33,6 +33,13 @@
                     android:host="callback" />
             </intent-filter>
         </activity>
+        <receiver
+            android:name=".CustomTabsCloser"
+            android:exported="false"> <!-- Assuming it's only for internal use -->
+            <intent-filter>
+                <action android:name="com.github.b4ndithelps.wave.CLOSE_CUSTOM_TABS" />
+            </intent-filter>
+        </receiver>
         <activity
             android:name=".SpotifyEpubReaderActivity"
             android:exported="true">

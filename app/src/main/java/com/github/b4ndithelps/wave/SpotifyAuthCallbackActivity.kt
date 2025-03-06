@@ -31,6 +31,7 @@ class SpotifyAuthCallbackActivity : AppCompatActivity() {
             spotManager.setProcessingCallback(true)
             handleAuthenticationCallback(intent)
         } else {
+            setResult(RESULT_CANCELED)
             finish()
         }
     }
@@ -117,6 +118,8 @@ class SpotifyAuthCallbackActivity : AppCompatActivity() {
             putExtra("expires_in", expiresIn)
         }
 
+        sendBroadcast(Intent(CustomTabsCloser.ACTION_CLOSE_TABS))
+
         finishWithResult(resultIntent)
 //        setResult(RESULT_OK, resultIntent)
     }
@@ -124,7 +127,6 @@ class SpotifyAuthCallbackActivity : AppCompatActivity() {
     // Call this method to finish the activity and pass the results back
     private fun finishWithResult(resultIntent: Intent) {
         setResult(RESULT_OK, resultIntent)
-
         finish()
     }
 

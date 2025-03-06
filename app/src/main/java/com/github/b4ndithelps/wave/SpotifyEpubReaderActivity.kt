@@ -1253,12 +1253,15 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-//        if (requestCode == SpotifyAuthConfig.REQUEST_CODE && resultCode == RESULT_OK) {
-//            if (data != null) {
-//                // Process the tokens with SpotManager
-//                spotManager.processAuthResponse(data)
-//            }
-//        }
+        Log.d("SpotifyAuth", "Made it back to the main activity")
+        if (requestCode == SpotifyAuthConfig.REQUEST_CODE && resultCode == RESULT_OK) {
+            if (data != null) {
+                // Process the tokens with SpotManager
+                spotManager.processAuthResponse(data)
+            }
+        } else {
+            Log.e("SpotiyAuth", "Authentication was cancelled or failed.")
+        }
     }
 
 //    override fun onActivityResult(requestCode: Int, resultCode: Int, intent: Intent?) {

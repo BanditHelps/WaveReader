@@ -1,23 +1,33 @@
 package com.github.b4ndithelps.wave.spotify
 
+import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.ComponentCaller
 import android.app.PendingIntent
 import android.content.Intent
-import android.net.Uri
+import android.content.IntentFilter
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.browser.customtabs.CustomTabsIntent
+import com.github.b4ndithelps.wave.CustomTabsCloser
 import com.github.b4ndithelps.wave.SpotifyAuthCallbackActivity
 import com.github.b4ndithelps.wave.WaveReaderApplication
 
 class SpotifyAuthActivity : AppCompatActivity() {
+
+    private lateinit var customTabsCloseBroadcastReceiver: CustomTabsCloser
+    private val exportFlag: Int = 2
+
+    @SuppressLint("WrongConstant")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val app = application as WaveReaderApplication
         val spotManager = app.spotifyManagerInstance ?: throw IllegalStateException("SpotifyManager not initialized")
+
+        customTabsCloseBroadcastReceiver = CustomTabsCloser()
+        val intentFilter = IntentFilter(CustomTabsCloser.ACTION_CLOSE_TABS)
+        registerReceiver(customTabsCloseBroadcastReceiver, intentFilter, exportFlag)
 
         val authUrl = spotManager.loadAuthUrl()
         Log.d("SpotifyAuth", "Oncreate of auth activity")
@@ -25,6 +35,8 @@ class SpotifyAuthActivity : AppCompatActivity() {
         if (authUrl != null) {
             // Create the intent for the callback activity
             val callbackIntent = Intent(this, SpotifyAuthCallbackActivity::class.java)
+            callbackIntent.putExtra("SHOULD_CLOSE_TAB", true)
+
             val pendingIntent = PendingIntent.getActivity(
                 this,
                 SpotifyAuthConfig.REQUEST_CODE,
@@ -46,6 +58,15 @@ class SpotifyAuthActivity : AppCompatActivity() {
             Log.e("SpotifyAuth", "No Authentication Url found!")
             setResult(RESULT_CANCELED)
             finish()
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(customTabsCloseBroadcastReceiver)
+        } catch (e: Exception) {
+            Log.w("SpotifyAuth", "Error unregistering receiver", e)
         }
     }
 
