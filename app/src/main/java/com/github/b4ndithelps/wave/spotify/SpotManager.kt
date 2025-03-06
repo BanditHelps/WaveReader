@@ -6,11 +6,9 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
-import androidx.browser.customtabs.CustomTabsIntent
 import com.github.b4ndithelps.wave.model.SpotifyPlaylist
 import com.github.b4ndithelps.wave.model.SpotifyTrack
 import com.google.gson.GsonBuilder
-import com.google.gson.annotations.SerializedName
 import com.spotify.android.appremote.api.ConnectionParams
 import com.spotify.android.appremote.api.Connector
 import com.spotify.android.appremote.api.SpotifyAppRemote
@@ -21,9 +19,6 @@ import com.spotify.protocol.client.Subscription
 import com.spotify.protocol.types.Image
 import com.spotify.protocol.types.PlayerState
 import com.spotify.protocol.types.Track
-import com.spotify.sdk.android.auth.AuthorizationClient
-import com.spotify.sdk.android.auth.AuthorizationRequest
-import com.spotify.sdk.android.auth.AuthorizationResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Interceptor
@@ -121,18 +116,6 @@ data class SpotifyPlaylistTracksResponse(
 data class SpotifySearchResponse(
     val playlists: SpotifyPagingObject<SpotifyPlaylistResponse>?
 )
-
-data class TokenResponse(
-    @SerializedName("access_token") val accessToken: String,
-    @SerializedName("token_type") val tokenType: String,
-    @SerializedName("expires_in") val expiresIn: Int,
-    @SerializedName("refresh_token") val refreshToken: String?
-)
-
-data class PlayerItem(
-    val uri: String
-)
-
 /**
  * Spotify Web API interface
  */
@@ -174,7 +157,7 @@ class SpotManager(private val context: Context) {
     private var refreshToken: String? = null
     private var currentBookPath: String? = null // Stores the current book path
     private var spotifyAppRemote: SpotifyAppRemote? = null
-    private var authenticated: Boolean = false
+    private var remoteAuthenticated: Boolean = false
     private var webApiAuthenticated: Boolean = false
     private var accessToken: String? = null
     private var currentPlayerState: PlayerState? = null
@@ -197,6 +180,10 @@ class SpotManager(private val context: Context) {
     // Callback for when album art is loaded
     private var albumArtCallback: ((bitmap: Bitmap) -> Unit)? = null
 
+    // ==================================
+    //    Getters and Setters
+    // ==================================
+
     fun storeCodeVerifier(codeVerifier: String) {
         this.codeVerifier = codeVerifier
     }
@@ -213,18 +200,6 @@ class SpotManager(private val context: Context) {
         return isProcessingAuthResponse
     }
 
-    /**
-     * Initiates the authentication process with Spotify
-     * This will handle both App Remote and Web API authentication
-     */
-    fun authenticate() {
-        // First authenticate with App Remote for playback control
-        authenticateAppRemote()
-        
-        // Then authenticate with Web API for enhanced data access
-        authenticateWebApi()
-    }
-
     fun attemptedAuth(): Boolean {
         return authAttempted
     }
@@ -232,6 +207,27 @@ class SpotManager(private val context: Context) {
     fun setAuthAttempted() {
         authAttempted = true
     }
+
+    /**
+     * Returns whether the manager is authenticated with Spotify App Remote
+     */
+    fun isRemoteAuthenticated(): Boolean = remoteAuthenticated
+
+    /**
+     * Returns whether the manager is authenticated with Spotify Web API
+     */
+    fun isWebApiAuthenticated(): Boolean = webApiAuthenticated
+
+    /**
+     * Initiates the authentication process with Spotify
+     * This will handle both App Remote and Web API authentication
+     */
+    fun authenticateRemote() {
+        // First authenticate with App Remote for playback control
+        authenticateAppRemote()
+    }
+
+
 
     // =============================
     //      App Remote Section
@@ -249,32 +245,32 @@ class SpotManager(private val context: Context) {
         SpotifyAppRemote.connect(context, connectionParams, object: Connector.ConnectionListener {
             override fun onConnected(appRemote: SpotifyAppRemote) {
                 spotifyAppRemote = appRemote
-                Log.d("SpotManager", "Connected to Spotify App Remote Successfully!")
-                authenticated = true
+                Log.d("SpotifyAuth", "Connected to Spotify App Remote Successfully!")
+                remoteAuthenticated = true
                 
                 // Subscribe to player state changes
                 subscribeToPlayerState()
             }
 
             override fun onFailure(throwable: Throwable) {
-                Log.e("SpotManager", throwable.message, throwable)
+                Log.e("SpotifyAuth", throwable.message, throwable)
                 
                 when (throwable) {
                     is NotLoggedInException, is UserNotAuthorizedException -> {
                         // Handle auth errors - user needs to login to Spotify
-                        Log.e("SpotManager", "User needs to log in to Spotify")
+                        Log.e("SpotifyAuth", "User needs to log in to Spotify")
                     }
                     is CouldNotFindSpotifyApp -> {
                         // Handle case where Spotify app is not installed
-                        Log.e("SpotManager", "Spotify app not installed")
+                        Log.e("SpotifyAuth", "Spotify app not installed")
                     }
                     else -> {
                         // Handle other errors
-                        Log.e("SpotManager", "Error connecting to Spotify: ${throwable.message}")
+                        Log.e("SpotifyAuth", "Error connecting to Spotify: ${throwable.message}")
                     }
                 }
                 
-                authenticated = false
+                remoteAuthenticated = false
             }
         })
     }
@@ -286,7 +282,7 @@ class SpotManager(private val context: Context) {
         playerStateChangeCallback = callback
 
         // Immediately update with current state if available
-        if (authenticated && currentTrack != null) {
+        if (remoteAuthenticated && currentTrack != null) {
             callback(isPlaying, currentTrack)
         }
     }
@@ -356,7 +352,7 @@ class SpotManager(private val context: Context) {
      * AppRemote - Toggles between play and pause
      */
     fun togglePlayPause() {
-        if (!authenticated) return
+        if (!remoteAuthenticated) return
 
         spotifyAppRemote?.playerApi?.let { playerApi ->
             if (isPlaying) {
@@ -371,7 +367,7 @@ class SpotManager(private val context: Context) {
      * AppRemote - Plays a specific track by URI
      */
     fun playTrack(trackUri: String) {
-        if (!authenticated) return
+        if (!remoteAuthenticated) return
 
         // Format the URI if it's just an ID
         val fullUri = if (trackUri.startsWith("spotify:track:")) {
@@ -387,7 +383,7 @@ class SpotManager(private val context: Context) {
      * AppRemote - Skips to the next track
      */
     fun skipToNext() {
-        if (!authenticated) return
+        if (!remoteAuthenticated) return
 
         spotifyAppRemote?.playerApi?.skipNext()
     }
@@ -396,7 +392,7 @@ class SpotManager(private val context: Context) {
      * AppRemote - Skips to the previous track
      */
     fun skipToPrevious() {
-        if (!authenticated) return
+        if (!remoteAuthenticated) return
 
         spotifyAppRemote?.playerApi?.skipPrevious()
     }
@@ -405,7 +401,7 @@ class SpotManager(private val context: Context) {
      * AppRemote - Plays a specific playlist
      */
     fun playPlaylist(playlistUri: String) {
-        if (!authenticated) return
+        if (!remoteAuthenticated) return
 
         // Format the URI if it's just an ID
         val fullUri = if (playlistUri.startsWith("spotify:playlist:")) {
@@ -422,29 +418,7 @@ class SpotManager(private val context: Context) {
     // ==========================
     //      Web API Section
     // ==========================
-    
-    /**
-     * WebAPI - Authenticates with Spotify Web API for enhanced data access
-     */
-    private fun authenticateWebApi() {
-        val request = AuthorizationRequest.Builder(
-            SpotifyAuthConfig.CLIENT_ID,
-            AuthorizationResponse.Type.TOKEN,
-            SpotifyAuthConfig.REDIRECT_URI
-        )
-        .setScopes(SpotifyAuthConfig.SCOPES.split(" ").toTypedArray())
-        .build()
-        
-        // Open the authentication page in Custom Tabs
-        val intent = CustomTabsIntent.Builder().build()
-        val uri = Uri.parse(request.toUri().toString())
-        intent.launchUrl(context, uri)
-    }
-    
-    /**
-     * Process authentication response
-     * Call this method from your activity's onNewIntent or similar method
-     */
+
     /**
      * Process authentication response
      * Call this method with the intent containing token information
@@ -524,7 +498,7 @@ class SpotManager(private val context: Context) {
         spotifyAppRemote?.let {
             SpotifyAppRemote.disconnect(it)
             spotifyAppRemote = null
-            authenticated = false
+            remoteAuthenticated = false
         }
         
         // Clear Web API auth
@@ -714,21 +688,13 @@ class SpotManager(private val context: Context) {
      */
     fun getCurrentTrack(): SpotifyTrack? = currentTrack
     
-    /**
-     * Returns whether the manager is authenticated with Spotify App Remote
-     */
-    fun isRemoteAuthenticated(): Boolean = authenticated
-    
-    /**
-     * Returns whether the manager is authenticated with Spotify Web API
-     */
-    fun isWebApiAuthenticated(): Boolean = webApiAuthenticated
+
     
     /**
      * Enables/disables repeat mode
      */
     fun setRepeat(on: Boolean) {
-        if (!authenticated) return
+        if (!remoteAuthenticated) return
 
         val onInt = if (on) 1 else 0
         spotifyAppRemote?.playerApi?.setRepeat(onInt)
@@ -738,7 +704,7 @@ class SpotManager(private val context: Context) {
      * Enables/disables shuffle mode
      */
     fun setShuffle(on: Boolean) {
-        if (!authenticated) return
+        if (!remoteAuthenticated) return
         
         spotifyAppRemote?.playerApi?.setShuffle(on)
     }
