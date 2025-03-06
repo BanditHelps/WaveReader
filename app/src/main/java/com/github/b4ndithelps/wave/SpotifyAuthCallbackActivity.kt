@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.Button
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.lifecycle.lifecycleScope
@@ -25,7 +26,7 @@ class SpotifyAuthCallbackActivity : AppCompatActivity() {
     private var accessToken: String? = null
     private var refreshToken: String? = null
     private var expiresIn: Int = 0
-    private var shouldDisplayConfirmation: Boolean = false
+    private var shouldDisplayConfirmation: Boolean = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,20 +34,17 @@ class SpotifyAuthCallbackActivity : AppCompatActivity() {
 
         Log.d("SpotifyAuth", "On Create of Callback Activity")
 
-        // Get display confirmation preference from intent
-        shouldDisplayConfirmation = intent.getBooleanExtra("DISPLAY_CONFIRMATION", false)
-        Log.d("SpotifyAuth", "Should display confirmation: $shouldDisplayConfirmation")
-
         // Initialize UI components
         authCompletedCard = findViewById(R.id.authCompletedCard)
         returnToAppButton = findViewById(R.id.returnToAppButton)
         
-        // Hide confirmation card by default - will be shown after auth completes if needed
+        // Hide confirmation card by default - will be shown after auth completes
         authCompletedCard.visibility = View.GONE
         
         // Set up return button click listener
         returnToAppButton.setOnClickListener {
-            finishWithSuccess()
+            // Launch a fresh SpotifyEpubReaderActivity instead of returning through intent chain
+            startNewReaderActivity()
         }
 
         val app = application as WaveReaderApplication
@@ -56,8 +54,7 @@ class SpotifyAuthCallbackActivity : AppCompatActivity() {
             spotManager.setProcessingCallback(true)
             handleAuthenticationCallback(intent)
         } else {
-            setResult(RESULT_CANCELED)
-            finish()
+            showAuthenticationComplete()
         }
     }
 
@@ -76,16 +73,16 @@ class SpotifyAuthCallbackActivity : AppCompatActivity() {
                     exchangeCodeForTokens(code, codeVerifier)
                 } else {
                     Log.e("SpotifyAuth", "Code verifier not found")
-                    finishWithCancellation()
+                    showFailedAuthentication("Code verification failed")
                 }
             } else {
                 // Handle error scenario
                 Log.e("SpotifyAuth", "No authorization code received")
-                finishWithCancellation()
+                showFailedAuthentication("No authorization code received")
             }
         } else {
             Log.e("SpotifyAuth", "Invalid redirect URI")
-            finishWithCancellation()
+            showFailedAuthentication("Invalid redirect URI")
         }
     }
 
@@ -107,8 +104,7 @@ class SpotifyAuthCallbackActivity : AppCompatActivity() {
                     .post(requestBody)
                     .build()
 
-                // Execute the HTTP response on the IO thread cause doing it on the main
-                // makes Android really mad
+                // Execute the HTTP response on the IO thread
                 val response = withContext(Dispatchers.IO) {
                     client.newCall(request).execute()
                 }
@@ -118,62 +114,83 @@ class SpotifyAuthCallbackActivity : AppCompatActivity() {
                 if (response.isSuccessful && responseBody != null) {
                     val tokenResponse = JSONObject(responseBody)
                     accessToken = tokenResponse.getString("access_token")
-                    refreshToken = tokenResponse.optString("refresh_token", null)
+                    refreshToken = tokenResponse.optString("refresh_token", "")
                     expiresIn = tokenResponse.getInt("expires_in")
 
-                    // Process tokens and show completion dialog if required
-//                    if (shouldDisplayConfirmation) {
-//                        showAuthenticationComplete()
-//                    } else {
-//                        // Immediately return with success
-//                        finishWithSuccess()
-//                    }
+                    // Store tokens directly in the SpotManager using the existing method
+                    val authIntent = Intent().apply {
+                        putExtra("access_token", accessToken)
+                        putExtra("refresh_token", refreshToken)
+                        putExtra("expires_in", expiresIn)
+                    }
+                    spotManager.processAuthResponse(authIntent)
+                    
+                    // Show confirmation dialog
                     showAuthenticationComplete()
                 } else {
                     Log.e("SpotifyAuth", "Token exchange failed: ${response.code}")
-                    finishWithCancellation()
+                    showFailedAuthentication("Token exchange failed: ${response.code}")
                 }
             } catch (e: Exception) {
                 Log.e("SpotifyAuth", "Token exchange error", e)
-                finishWithCancellation()
+                showFailedAuthentication("Token exchange error: ${e.message}")
             }
         }
     }
 
     private fun showAuthenticationComplete() {
-        // Show the completion card
+        // Show the confirmation card with success message
         runOnUiThread {
+            findViewById<TextView>(R.id.authTitleTextView)?.text = "Spotify Authentication Complete"
+            findViewById<TextView>(R.id.authMessageTextView)?.text = 
+                "Your Spotify account has been successfully connected."
+            returnToAppButton.text = "Return to Reader"
+            authCompletedCard.visibility = View.VISIBLE
+        }
+    }
+    
+    private fun showFailedAuthentication(errorMessage: String) {
+        // Show the confirmation card with error message
+        runOnUiThread {
+            findViewById<TextView>(R.id.authTitleTextView)?.text = "Authentication Failed"
+            findViewById<TextView>(R.id.authMessageTextView)?.text = 
+                errorMessage
+            returnToAppButton.text = "Return to App"
             authCompletedCard.visibility = View.VISIBLE
         }
     }
 
-    // Call this method when the user clicks the return button
-    private fun finishWithSuccess() {
-        if (accessToken != null) {
-            // Create an intent to send back to the main activity
-            val resultIntent = Intent().apply {
-                putExtra("access_token", accessToken)
-                putExtra("refresh_token", refreshToken)
-                putExtra("expires_in", expiresIn)
-            }
-            setResult(RESULT_OK, resultIntent)
+    private fun startNewReaderActivity() {
+        val intent = Intent(this, SpotifyEpubReaderActivity::class.java)
+        // Add any necessary extra data
+        intent.putExtra("FROM_SPOTIFY_AUTH", true)
+        
+        // Get the book path from the SpotManager instead of the intent
+        val bookPath = spotManager.getCurrentBookPath()
+        if (bookPath != null) {
+            intent.putExtra("bookPath", bookPath)
+            Log.d("SpotifyAuth", "Using stored book path: $bookPath")
         } else {
-            setResult(RESULT_CANCELED)
+            // Fallback to intent extras if available
+            val intentBookPath = getIntent().getStringExtra("bookPath")
+            if (intentBookPath != null) {
+                intent.putExtra("bookPath", intentBookPath)
+                Log.d("SpotifyAuth", "Using intent book path: $intentBookPath")
+            } else {
+                Log.w("SpotifyAuth", "No book path available")
+            }
         }
+        
+        // Clear back stack and start fresh
+        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+        startActivity(intent)
         finish()
     }
 
-    // In case of errors or cancellations, finish with RESULT_CANCELED
-    private fun finishWithCancellation() {
-        setResult(RESULT_CANCELED)
-        finish()
-    }
-
-    @Override
     override fun onBackPressed() {
-        // If the auth completed card is visible, finish with success
+        // If the auth completed card is visible, start new reader activity
         if (authCompletedCard.visibility == View.VISIBLE) {
-            finishWithSuccess()
+            startNewReaderActivity()
         } else {
             // Otherwise proceed with default back behavior
             super.onBackPressed()

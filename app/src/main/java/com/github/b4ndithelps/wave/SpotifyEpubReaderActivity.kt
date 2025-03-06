@@ -185,13 +185,17 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
         hideMenus()
 
         // Pull in the book path passed to the intent, and attempt to load it
+        // Pull in the book path passed to the intent, and attempt to load it
         val bookPath = intent.getStringExtra("bookPath")
         if (bookPath != null) {
+            // Store the book path in SpotManager for later retrieval
+            spotManager.setCurrentBookPath(bookPath)
+            Log.d("SpotifyReader", "Stored book path in SpotManager: $bookPath")
+            
             lifecycleScope.launch {
                 prepareAndLoadBook(bookPath)
             }
         }
-
         checkSpotifyAuthentication()
     }
 
@@ -208,6 +212,7 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
             // If we have already attempted auth, and it failed...give up.
             // Else, start the authentication process
             spotManager.setAuthAttempted()
+            spotManager.setCurrentBookPath(intent.getStringExtra("bookPath"))
             initiateSpotifyAuthentication()
         } else {
             Log.d("SpotifyAuth", "Authentication already attempted. Leaving")
@@ -1223,7 +1228,7 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
-        spotManager.disconnect()
+//        spotManager.disconnect()
     }
     
     override fun onDestroy() {

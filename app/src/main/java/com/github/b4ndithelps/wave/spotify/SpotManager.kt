@@ -172,6 +172,7 @@ interface SpotifyService {
  */
 class SpotManager(private val context: Context) {
     private var refreshToken: String? = null
+    private var currentBookPath: String? = null // Stores the current book path
     private var spotifyAppRemote: SpotifyAppRemote? = null
     private var authenticated: Boolean = false
     private var webApiAuthenticated: Boolean = false
@@ -748,5 +749,19 @@ class SpotManager(private val context: Context) {
 
     fun loadAuthUrl(): Uri? {
         return authUrl
+    }
+
+    /**
+     * Store current book path so it can be retrieved later
+     */
+    fun setCurrentBookPath(path: String?) {
+        this.currentBookPath = path
+    }
+    
+    /**
+     * Get the current book path
+     */
+    fun getCurrentBookPath(): String? {
+        return currentBookPath
     }
 }
