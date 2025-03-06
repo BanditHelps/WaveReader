@@ -38,9 +38,11 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.RecyclerView
 import com.github.b4ndithelps.wave.adapter.SpotifyPlaylistAdapter
 import com.github.b4ndithelps.wave.data.AppDatabase
+import com.github.b4ndithelps.wave.data.PinnedPlaylist
 import com.github.b4ndithelps.wave.data.SavedPosition
 import com.github.b4ndithelps.wave.htmlstyling.StyleManager
 import com.github.b4ndithelps.wave.htmlstyling.ThemeType
+import com.github.b4ndithelps.wave.model.SpotifyPlaylist
 import com.github.b4ndithelps.wave.model.SpotifyTrack
 import com.github.b4ndithelps.wave.spotify.EntropyMachine
 import com.github.b4ndithelps.wave.spotify.SpotManager
@@ -294,15 +296,22 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
         playlistsRecyclerView.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
 
         // Start with empty list, will get updated on authentication
-        playlistAdapter = SpotifyPlaylistAdapter(emptyList()) { playlist ->
-            // Handle playlist selection
-            spotManager.playPlaylist(playlist.id)
-            // Close the drawer when a playlist is selected
-            drawerLayout.closeDrawer(GravityCompat.END)
+        playlistAdapter = SpotifyPlaylistAdapter(
+            emptyList(),
+            onPlaylistSelected = { playlist ->
+                // Handle playlist selection
+                spotManager.playPlaylist(playlist.id)
+                // Close the drawer when a playlist is selected
+                drawerLayout.closeDrawer(GravityCompat.END)
 
-            // Show loading toast
-            android.widget.Toast.makeText(this, "Loading playlist: ${playlist.name}", android.widget.Toast.LENGTH_SHORT).show()
-        }
+                // Show loading toast
+                android.widget.Toast.makeText(this, "Loading playlist: ${playlist.name}", android.widget.Toast.LENGTH_SHORT).show()
+            },
+            onPinClicked = { playlist, shouldPin ->
+                // Handle pinning/unpinning
+                togglePinPlaylist(playlist, shouldPin)
+            }
+        )
         playlistsRecyclerView.adapter = playlistAdapter
 
         // Set up search functionality
@@ -316,8 +325,10 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
                     // Search for playlists matching the query using Web API
                     lifecycleScope.launch {
                         val searchResults = spotManager.searchPlaylists(query)
+                        // Mark which ones are pinned
+                        val updatedResults = markPinnedPlaylists(searchResults)
                         withContext(Dispatchers.Main) {
-                            playlistAdapter.updatePlaylists(searchResults)
+                            playlistAdapter.updatePlaylists(updatedResults)
                         }
                     }
                 } else {
@@ -400,9 +411,82 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
      */
     private fun refreshPlaylists() {
         lifecycleScope.launch {
+            // Get all playlists from Spotify
             val playlists = spotManager.fetchPlaylists()
+            
+            // Mark which ones are pinned
+            val updatedPlaylists = markPinnedPlaylists(playlists)
+            
             withContext(Dispatchers.Main) {
-                playlistAdapter.updatePlaylists(playlists)
+                playlistAdapter.updatePlaylists(updatedPlaylists)
+            }
+        }
+    }
+    
+    /**
+     * Mark playlists as pinned based on database records
+     */
+    private suspend fun markPinnedPlaylists(playlists: List<SpotifyPlaylist>): List<SpotifyPlaylist> {
+        return withContext(Dispatchers.IO) {
+            // Get list of pinned playlist IDs from database
+            val pinnedPlaylistDao = AppDatabase.getDatabase(applicationContext).pinnedPlaylistDao()
+            val pinnedPlaylists = pinnedPlaylistDao.getAllPinnedPlaylists()
+            val pinnedIds = pinnedPlaylists.map { it.playlistId }.toSet()
+            
+            // Match and mark playlists as pinned
+            val updatedPlaylists = playlists.map { playlist ->
+                if (pinnedIds.contains(playlist.id)) {
+                    // Create a copy with isPinned=true
+                    playlist.copy(isPinned = true)
+                } else {
+                    playlist
+                }
+            }
+            
+            // Sort playlists - pinned first, then others
+            val sortedPlaylists = updatedPlaylists.sortedWith(
+                compareByDescending<SpotifyPlaylist> { it.isPinned }
+            )
+            
+            return@withContext sortedPlaylists
+        }
+    }
+    
+    /**
+     * Toggle pin status for a playlist
+     */
+    private fun togglePinPlaylist(playlist: SpotifyPlaylist, shouldPin: Boolean) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                val pinnedPlaylistDao = AppDatabase.getDatabase(applicationContext).pinnedPlaylistDao()
+                
+                if (shouldPin) {
+                    // Pin the playlist
+                    val pinnedPlaylist = PinnedPlaylist.fromSpotifyPlaylist(playlist)
+                    pinnedPlaylistDao.pinPlaylist(pinnedPlaylist)
+                    
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            this@SpotifyEpubReaderActivity, 
+                            "Added ${playlist.name} to pinned playlists", 
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    // Unpin the playlist
+                    pinnedPlaylistDao.unpinPlaylist(playlist.id)
+                    
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            this@SpotifyEpubReaderActivity, 
+                            "Removed ${playlist.name} from pinned playlists", 
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+                
+                // Refresh playlists to update the UI
+                refreshPlaylists()
             }
         }
     }

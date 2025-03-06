@@ -7,5 +7,6 @@ data class SpotifyPlaylist(
     val imageUrl: String = "",
     val trackCount: Int = 0,
     val creator: String = "",
-    val tracks: List<SpotifyTrack> = emptyList()
+    val tracks: List<SpotifyTrack> = emptyList(),
+    val isPinned: Boolean = false
 )
