@@ -129,8 +129,6 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     private lateinit var previousButton: ImageButton
     private lateinit var playlistButton: ImageButton
 
-    private lateinit var spotAuthWebView: WebView
-    
     // Mini player in the playlist panel
     private lateinit var miniAlbumArtImageView: ImageView
     private lateinit var miniTrackNameTextView: TextView
@@ -141,8 +139,6 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     private var isSystemUIVisible = true
 
     private lateinit var spotManager: SpotManager
-    private val REQUEST_CODE: Int = 1337 // Request code will be used to verify if result comes from the login activity. Can be set to any integer.
-//    private var attemptedAuth = false
 
     /**
      * onCreate is called when the activity is first launched. It is used to setup the menus,
@@ -151,9 +147,6 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_epub_reader)
-
-        // Restore authentication state if the activity is recreated
-//        attemptedAuth = savedInstanceState?.getBoolean("ATTEMPTED_AUTH") ?: false
 
         // Initialize Spotify Manager
         retrieveSpotifyAuthFromApplication()
@@ -173,7 +166,6 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
         hideMenus()
 
         // Pull in the book path passed to the intent, and attempt to load it
-        // Pull in the book path passed to the intent, and attempt to load it
         val bookPath = intent.getStringExtra("bookPath")
         if (bookPath != null) {
             // Store the book path in SpotManager for later retrieval
@@ -188,15 +180,21 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     }
 
     private fun checkSpotifyAuthentication() {
-
-        // Attempt to authenticate with the Web API.  Will not try multiple attempts on failure
+        // Attempt to authenticate with the Web API
         if (!spotManager.isWebApiAuthenticated()) {
+            // If we've never attempted auth in this session, try now
             if (!spotManager.attemptedAuth()) {
                 spotManager.setAuthAttempted()
                 spotManager.setCurrentBookPath(intent.getStringExtra("bookPath"))
                 initiateSpotifyWebAuthentication()
             } else {
-                Log.d("SpotifyAuth", "Authentication to WebAPI already attempted. Leaving")
+                Log.d("SpotifyAuth", "Authentication to WebAPI already attempted this session. Skipping.")
+            }
+        } else {
+            Log.d("SpotifyAuth", "Already authenticated with Spotify WebAPI")
+            // Refresh playlists in the background since we're already authenticated
+            lifecycleScope.launch {
+                refreshPlaylists()
             }
         }
 
@@ -207,7 +205,6 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
 
         Log.d("SpotifyAuth", "Remote: ${spotManager.isRemoteAuthenticated()}")
         Log.d("SpotifyAuth", "WebAPI: ${spotManager.isWebApiAuthenticated()}")
-
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -411,6 +408,10 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
      */
     private fun refreshPlaylists() {
         lifecycleScope.launch {
+            // Ensure token is valid before fetching playlists
+            // Add this to refresh token if needed
+            spotManager.refreshTokenIfNeeded()
+            
             // Get all playlists from Spotify
             val playlists = spotManager.fetchPlaylists()
             

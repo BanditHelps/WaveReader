@@ -21,10 +21,13 @@ import com.spotify.protocol.types.PlayerState
 import com.spotify.protocol.types.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.FormBody
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.ResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
+import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -154,12 +157,10 @@ interface SpotifyService {
  * Provides functionality for playback control, playlist management, and more
  */
 class SpotManager(private val context: Context) {
-    private var refreshToken: String? = null
     private var currentBookPath: String? = null // Stores the current book path
     private var spotifyAppRemote: SpotifyAppRemote? = null
     private var remoteAuthenticated: Boolean = false
     private var webApiAuthenticated: Boolean = false
-    private var accessToken: String? = null
     private var currentPlayerState: PlayerState? = null
     private var playerStateSubscription: Subscription<PlayerState>? = null
     private var currentTrack: SpotifyTrack? = null
@@ -168,8 +169,10 @@ class SpotManager(private val context: Context) {
     private var authAttempted: Boolean = false
     private var codeVerifier: String? = null
     private var authUrl: Uri? = null
-
     private var isProcessingAuthResponse: Boolean = false // tracks the callback progress
+    
+    // Token storage for persistence
+    private val authStorage = SpotAuthStorage(context)
     
     // Retrofit client for Web API
     private lateinit var spotifyService: SpotifyService
@@ -179,6 +182,31 @@ class SpotManager(private val context: Context) {
     
     // Callback for when album art is loaded
     private var albumArtCallback: ((bitmap: Bitmap) -> Unit)? = null
+
+    // Initialize authentication from storage if available
+    init {
+        attemptRestoreAuthFromStorage()
+    }
+
+    /**
+     * Attempts to restore authentication from persistent storage
+     * If a valid token exists, it initializes the API client
+     */
+    private fun attemptRestoreAuthFromStorage() {
+        if (authStorage.hasValidCredentials()) {
+            val accessToken = authStorage.getAccessToken()
+            if (accessToken != null && !authStorage.isTokenExpired()) {
+                // Valid access token exists
+                Log.d("SpotManager", "Restored valid access token from storage")
+                webApiAuthenticated = true
+                initializeWebApiClient(accessToken)
+            } else if (authStorage.getRefreshToken() != null) {
+                // Token expired but we have a refresh token
+                Log.d("SpotManager", "Access token expired, attempting to refresh")
+                // We'll refresh the token when needed (lazy loading)
+            }
+        }
+    }
 
     // ==================================
     //    Getters and Setters
@@ -216,7 +244,7 @@ class SpotManager(private val context: Context) {
     /**
      * Returns whether the manager is authenticated with Spotify Web API
      */
-    fun isWebApiAuthenticated(): Boolean = webApiAuthenticated
+    fun isWebApiAuthenticated(): Boolean = webApiAuthenticated || authStorage.hasValidCredentials()
 
     /**
      * Initiates the authentication process with Spotify
@@ -226,8 +254,6 @@ class SpotManager(private val context: Context) {
         // First authenticate with App Remote for playback control
         authenticateAppRemote()
     }
-
-
 
     // =============================
     //      App Remote Section
@@ -413,8 +439,6 @@ class SpotManager(private val context: Context) {
         spotifyAppRemote?.playerApi?.play(fullUri)
     }
 
-
-
     // ==========================
     //      Web API Section
     // ==========================
@@ -431,8 +455,8 @@ class SpotManager(private val context: Context) {
             val expiresIn = intent.getIntExtra("expires_in", 0)
 
             if (accessToken != null) {
-                this.accessToken = accessToken
-                this.refreshToken = refreshToken
+                // Save tokens to storage
+                authStorage.saveTokens(accessToken, refreshToken, expiresIn)
                 webApiAuthenticated = true
 
                 Log.d("SpotManager", "Authenticated with Web API successfully!")
@@ -446,6 +470,72 @@ class SpotManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e("SpotManager", "Error processing auth response", e)
             webApiAuthenticated = false
+        }
+    }
+    
+    /**
+     * Refreshes an expired token using the refresh token
+     * @return true if refresh successful, false otherwise
+     */
+    suspend fun refreshTokenIfNeeded(): Boolean {
+        // If the token isn't expired, no need to refresh
+        if (!authStorage.isTokenExpired()) {
+            return true
+        }
+        
+        // Get the refresh token
+        val refreshToken = authStorage.getRefreshToken() ?: return false
+        
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.d("SpotManager", "Refreshing access token...")
+                val client = OkHttpClient()
+                
+                val requestBody = FormBody.Builder()
+                    .add("grant_type", "refresh_token")
+                    .add("refresh_token", refreshToken)
+                    .add("client_id", SpotifyAuthConfig.CLIENT_ID)
+                    .build()
+                
+                val request = Request.Builder()
+                    .url(SpotifyAuthConfig.AUTH_TOKEN_URL)
+                    .post(requestBody)
+                    .build()
+                
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string()
+                
+                if (response.isSuccessful && responseBody != null) {
+                    val tokenResponse = JSONObject(responseBody)
+                    val newAccessToken = tokenResponse.getString("access_token")
+                    val expiresIn = tokenResponse.getInt("expires_in")
+                    
+                    // The response may not always include a new refresh token
+                    val newRefreshToken = if (tokenResponse.has("refresh_token")) {
+                        tokenResponse.getString("refresh_token")
+                    } else {
+                        refreshToken
+                    }
+                    
+                    // Save the new tokens to storage
+                    authStorage.saveTokens(newAccessToken, newRefreshToken, expiresIn)
+                    
+                    // Update the web API client
+                    withContext(Dispatchers.Main) {
+                        initializeWebApiClient(newAccessToken)
+                        webApiAuthenticated = true
+                    }
+                    
+                    Log.d("SpotManager", "Token refresh successful")
+                    return@withContext true
+                } else {
+                    Log.e("SpotManager", "Token refresh failed: ${response.code}")
+                    return@withContext false
+                }
+            } catch (e: Exception) {
+                Log.e("SpotManager", "Exception during token refresh", e)
+                return@withContext false
+            }
         }
     }
     
@@ -501,8 +591,8 @@ class SpotManager(private val context: Context) {
             remoteAuthenticated = false
         }
         
-        // Clear Web API auth
-        accessToken = null
+        // Clear Web API auth - now we don't clear these by default
+        // authStorage.clearTokens() 
         webApiAuthenticated = false
         
         currentPlayerState = null
@@ -511,11 +601,13 @@ class SpotManager(private val context: Context) {
     
     /**
      * WebAPI - Fetches user's playlists using Web API for enhanced data
+     * Now automatically attempts to refresh token if needed
      */
     suspend fun fetchPlaylists(): List<SpotifyPlaylist> {
         return withContext(Dispatchers.IO) {
             try {
-                if (!webApiAuthenticated || accessToken == null) {
+                // Ensure we have a valid token
+                if (!ensureValidToken()) {
                     return@withContext emptyList<SpotifyPlaylist>()
                 }
                 
@@ -535,6 +627,13 @@ class SpotManager(private val context: Context) {
                     return@withContext playlists
                 } else {
                     Log.e("SpotManager", "Error fetching playlists: ${response.code()} ${response.message()}")
+                    
+                    // If unauthorized, try to refresh the token and retry once
+                    if (response.code() == 401 && refreshTokenIfNeeded()) {
+                        // Try again after refreshing
+                        return@withContext fetchPlaylists()
+                    }
+                    
                     return@withContext emptyList<SpotifyPlaylist>()
                 }
             } catch (e: Exception) {
@@ -545,12 +644,42 @@ class SpotManager(private val context: Context) {
     }
     
     /**
+     * Ensures we have a valid token for API requests
+     * Attempts to refresh if needed
+     * @return true if a valid token is available, false otherwise
+     */
+    private suspend fun ensureValidToken(): Boolean {
+        // Check if the token is expired and needs refreshing
+        if (authStorage.isTokenExpired()) {
+            // Try to refresh the token
+            if (!refreshTokenIfNeeded()) {
+                webApiAuthenticated = false
+                return false
+            }
+        }
+        
+        // Set webApiAuthenticated to true since we have a valid token
+        if (!webApiAuthenticated) {
+            val token = authStorage.getAccessToken()
+            if (token != null) {
+                webApiAuthenticated = true
+                initializeWebApiClient(token)
+            } else {
+                return false
+            }
+        }
+        
+        return webApiAuthenticated
+    }
+    
+    /**
      * Fetch a specific playlist's details using Web API
      */
     suspend fun getPlaylist(playlistId: String): SpotifyPlaylist? {
         return withContext(Dispatchers.IO) {
             try {
-                if (!webApiAuthenticated || accessToken == null) {
+                // Ensure we have a valid token
+                if (!ensureValidToken()) {
                     return@withContext null
                 }
                 
@@ -572,6 +701,13 @@ class SpotManager(private val context: Context) {
                     )
                 } else {
                     Log.e("SpotManager", "Error fetching playlist: ${response.code()} ${response.message()}")
+                    
+                    // If unauthorized, try to refresh the token and retry once
+                    if (response.code() == 401 && refreshTokenIfNeeded()) {
+                        // Try again after refreshing
+                        return@withContext getPlaylist(playlistId)
+                    }
+                    
                     return@withContext null
                 }
             } catch (e: Exception) {
@@ -588,6 +724,11 @@ class SpotManager(private val context: Context) {
         return withContext(Dispatchers.IO) {
             val allTracks = mutableListOf<SpotifyTrack>()
             try {
+                // Ensure we have a valid token
+                if (!ensureValidToken()) {
+                    return@withContext emptyList()
+                }
+                
                 var offset = 0
                 var hasMore = true
                 
@@ -617,6 +758,13 @@ class SpotManager(private val context: Context) {
                         }
                     } else {
                         Log.e("SpotManager", "Error fetching playlist tracks: ${response.code()} ${response.message()}")
+                        
+                        // If unauthorized, try to refresh the token and retry once
+                        if (response.code() == 401 && refreshTokenIfNeeded()) {
+                            // Since we're in a loop, just continue and the next iteration will use the fresh token
+                            continue
+                        }
+                        
                         hasMore = false
                     }
                 }
@@ -634,7 +782,8 @@ class SpotManager(private val context: Context) {
     suspend fun searchPlaylists(query: String): List<SpotifyPlaylist> {
         return withContext(Dispatchers.IO) {
             try {
-                if (!webApiAuthenticated || accessToken == null) {
+                // Ensure we have a valid token
+                if (!ensureValidToken()) {
                     return@withContext emptyList<SpotifyPlaylist>()
                 }
                 
@@ -654,6 +803,13 @@ class SpotManager(private val context: Context) {
                     return@withContext playlists
                 } else {
                     Log.e("SpotManager", "Error searching playlists: ${response.code()} ${response.message()}")
+                    
+                    // If unauthorized, try to refresh the token and retry once
+                    if (response.code() == 401 && refreshTokenIfNeeded()) {
+                        // Try again after refreshing
+                        return@withContext searchPlaylists(query)
+                    }
+                    
                     return@withContext emptyList<SpotifyPlaylist>()
                 }
             } catch (e: Exception) {
@@ -687,8 +843,6 @@ class SpotManager(private val context: Context) {
      * Returns the current track
      */
     fun getCurrentTrack(): SpotifyTrack? = currentTrack
-    
-
     
     /**
      * Enables/disables repeat mode
@@ -729,5 +883,22 @@ class SpotManager(private val context: Context) {
      */
     fun getCurrentBookPath(): String? {
         return currentBookPath
+    }
+    
+    /**
+     * Clear all authentication data
+     * This completely logs out the user from Spotify in the app
+     */
+    fun clearAuthentication() {
+        // Clear tokens from storage
+        authStorage.clearTokens()
+        
+        // Disconnect from Spotify
+        disconnect()
+        
+        // Reset authentication state
+        webApiAuthenticated = false
+        remoteAuthenticated = false
+        authAttempted = false
     }
 }
