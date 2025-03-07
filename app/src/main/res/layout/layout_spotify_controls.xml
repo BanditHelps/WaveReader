@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="12dp"
-    app:cardBackgroundColor="#121212"
+    app:cardBackgroundColor="#060706"
     app:cardCornerRadius="16dp"
     app:cardElevation="6dp">
 
@@ -74,7 +74,7 @@
                     android:contentDescription="Previous track"
                     android:padding="8dp"
                     android:src="@drawable/ic_previous"
-                    android:tint="#FFFFFF" />
+                    app:tint="#FFFFFF" />
 
                 <ImageButton
                     android:id="@+id/playPauseButton"
@@ -85,7 +85,7 @@
                     android:contentDescription="Play or pause"
                     android:padding="8dp"
                     android:src="@drawable/ic_play"
-                    android:tint="#FFFFFF" />
+                    app:tint="#FFFFFF" />
 
                 <ImageButton
                     android:id="@+id/nextButton"
@@ -95,7 +95,7 @@
                     android:contentDescription="Next track"
                     android:padding="8dp"
                     android:src="@drawable/ic_next"
-                    android:tint="#FFFFFF" />
+                    app:tint="#FFFFFF" />
             </LinearLayout>
         </LinearLayout>
 
@@ -107,7 +107,7 @@
             android:contentDescription="Open playlist"
             android:padding="8dp"
             android:src="@drawable/ic_playlist"
-            android:tint="#1DB954"
+            app:tint="#1DB954"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
