@@ -13,12 +13,6 @@
         android:layout_height="match_parent"
         android:fitsSystemWindows="true">
 
-        <include
-            android:id="@+id/topMenu"
-            layout="@layout/layout_top_menu"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:layout_constraintTop_toTopOf="parent" />
 
         <WebView
             android:id="@+id/epubWebView"
@@ -27,7 +21,7 @@
             app:layout_constraintBottom_toTopOf="@+id/page_info_bar"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/topMenu" />
+            app:layout_constraintTop_toTopOf="parent"/>
 
         <!-- Font Size Menu (Initially hidden) -->
         <androidx.cardview.widget.CardView
@@ -179,6 +173,13 @@
             tools:visibility="visible"/>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <include
+        android:id="@+id/topMenu"
+        layout="@layout/layout_top_menu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:elevation="12dp" />
 
     <!-- Spotify playlist drawer -->
     <include
