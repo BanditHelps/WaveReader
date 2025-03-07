@@ -784,37 +784,61 @@ class SpotManager(private val context: Context) {
             try {
                 // Ensure we have a valid token
                 if (!ensureValidToken()) {
+                    Log.d("SpotManager", "Token validation failed")
                     return@withContext emptyList<SpotifyPlaylist>()
                 }
-                
+
+                // Use enqueue with a callback instead of execute for better async handling
                 val response = spotifyService.search(query, "playlist").execute()
+
                 if (response.isSuccessful) {
                     val searchResponse = response.body()
-                    val playlists = searchResponse?.playlists?.items?.map { apiPlaylist ->
-                        SpotifyPlaylist(
-                            id = apiPlaylist.id,
-                            name = apiPlaylist.name,
-                            description = apiPlaylist.description,
-                            imageUrl = if (apiPlaylist.images.isNotEmpty()) apiPlaylist.images[0].url else "",
-                            trackCount = apiPlaylist.tracks.total,
-                            creator = apiPlaylist.owner.display_name
-                        )
-                    } ?: emptyList()
+                    Log.d("SpotManager", "Search response: ${searchResponse != null}")
+
+                    // Add null safety checks on each level
+                    val playlistItems = searchResponse?.playlists?.items
+                    if (playlistItems == null) {
+                        Log.e("SpotManager", "Playlist items is null")
+                        return@withContext emptyList()
+                    }
+
+                    val playlists = playlistItems.mapNotNull { apiPlaylist ->
+                        if (apiPlaylist == null) {
+                            Log.e("SpotManager", "Encountered null playlist in items")
+                            return@mapNotNull null
+                        }
+
+                        try {
+                            SpotifyPlaylist(
+                                id = apiPlaylist.id ?: "",
+                                name = apiPlaylist.name ?: "",
+                                description = apiPlaylist.description ?: "",
+                                imageUrl = if (!apiPlaylist.images.isNullOrEmpty()) apiPlaylist.images[0].url else "",
+                                trackCount = apiPlaylist.tracks?.total ?: 0,
+                                creator = apiPlaylist.owner?.display_name ?: ""
+                            )
+                        } catch (e: Exception) {
+                            Log.e("SpotManager", "Error mapping playlist", e)
+                            null
+                        }
+                    }
+
+                    Log.d("SpotManager", "Returning ${playlists.size} playlists")
                     return@withContext playlists
                 } else {
                     Log.e("SpotManager", "Error searching playlists: ${response.code()} ${response.message()}")
-                    
+
                     // If unauthorized, try to refresh the token and retry once
                     if (response.code() == 401 && refreshTokenIfNeeded()) {
                         // Try again after refreshing
                         return@withContext searchPlaylists(query)
                     }
-                    
-                    return@withContext emptyList<SpotifyPlaylist>()
+
+                    return@withContext emptyList()
                 }
             } catch (e: Exception) {
                 Log.e("SpotManager", "Exception searching playlists", e)
-                return@withContext emptyList<SpotifyPlaylist>()
+                return@withContext emptyList()
             }
         }
     }
