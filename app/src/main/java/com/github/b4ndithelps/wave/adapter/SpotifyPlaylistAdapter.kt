@@ -6,6 +6,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
 import com.github.b4ndithelps.wave.R
 import com.github.b4ndithelps.wave.model.SpotifyPlaylist
 
@@ -59,9 +60,9 @@ class SpotifyPlaylistAdapter(
             }
             playlistDetailsTextView.text = "$songsText$creatorText"
             
-            // Set the playlist cover image
-            // In a real implementation, use an image loading library like Glide
-            // Glide.with(itemView.context).load(playlist.imageUrl).into(playlistCoverImageView)
+            // Set the playlist cover image using glide
+            Glide.with(itemView.context).load(playlist.imageUrl).into(playlistCoverImageView)
+
             
             // Set current playing indicator
             if (playlist.id == currentPlayingPlaylistId) {
