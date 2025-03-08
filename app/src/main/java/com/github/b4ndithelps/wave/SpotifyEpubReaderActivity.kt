@@ -49,6 +49,8 @@ import com.github.b4ndithelps.wave.spotify.SpotManager
 import com.github.b4ndithelps.wave.spotify.SpotifyAuthActivity
 import com.github.b4ndithelps.wave.spotify.SpotifyAuthConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import nl.siegmann.epublib.domain.Book
@@ -120,6 +122,8 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     private lateinit var playlistAdapter: SpotifyPlaylistAdapter
     private lateinit var playlistSearchEditText: EditText
     private lateinit var playlistClearSeach: ImageView
+
+    private var searchJob: Job? = null
     
     // Spotify controls in the top menu
     private lateinit var albumArtImageView: ImageView
@@ -325,27 +329,34 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 val query = s.toString()
 
-                if (query.isNotEmpty()) {
-                    // Show the clear button
-                    playlistClearSeach.visibility = View.VISIBLE
+                // Cancel any previous search job.
+                searchJob?.cancel()
 
-                    // Search for playlists matching the query using Web API
-                    lifecycleScope.launch {
+                // Open the search in a job so we can easily cancel it if needed
+                // Required for quick changes to search term causing incorrect results
+                searchJob = lifecycleScope.launch {
+                    delay(300)
+
+                    if (query.isNotEmpty()) {
+                        // Show the clear button
+                        playlistClearSeach.visibility = View.VISIBLE
+
                         val searchResults = spotManager.searchPlaylists(query)
                         // Mark which ones are pinned
-                        val updatedResults = markPinnedPlaylists(searchResults)
+                        // val updatedResults = markPinnedPlaylists(searchResults)
                         withContext(Dispatchers.Main) {
-                            playlistAdapter.updatePlaylists(updatedResults)
+                            playlistAdapter.updatePlaylists(searchResults)
                         }
+                    } else {
+                        // If query is empty, fetch all playlists. Also hide the clear button
+                        playlistClearSeach.visibility = View.GONE
+                        refreshPlaylists()
                     }
-                } else {
-                    // If query is empty, fetch all playlists. Also hide the clear button
-                    playlistClearSeach.visibility = View.GONE
-                    refreshPlaylists()
                 }
+
             }
 
-            override fun afterTextChanged(s: android.text.Editable?) {}
+            override fun afterTextChanged(s: android.text.Editable?) { }
         })
 
         // Set up player state change listener
