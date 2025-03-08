@@ -119,6 +119,7 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
     private lateinit var playlistsRecyclerView: RecyclerView
     private lateinit var playlistAdapter: SpotifyPlaylistAdapter
     private lateinit var playlistSearchEditText: EditText
+    private lateinit var playlistClearSeach: ImageView
     
     // Spotify controls in the top menu
     private lateinit var albumArtImageView: ImageView
@@ -267,6 +268,7 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
         // Initialize Spotify playlist panel components
         playlistsRecyclerView = findViewById(R.id.playlistsRecyclerView)
         playlistSearchEditText = findViewById(R.id.playlistSearchEditText)
+        playlistClearSeach = findViewById(R.id.clearSearchImageView)
         
         // Initialize Spotify controls in top menu
         val spotifyControls = findViewById<View>(R.id.spotifyControlsInclude)
@@ -311,6 +313,11 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
         )
         playlistsRecyclerView.adapter = playlistAdapter
 
+        // Set up the clear search button
+        playlistClearSeach.setOnClickListener {
+            playlistSearchEditText.text.clear()
+        }
+
         // Set up search functionality
         playlistSearchEditText.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -319,6 +326,9 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
                 val query = s.toString()
 
                 if (query.isNotEmpty()) {
+                    // Show the clear button
+                    playlistClearSeach.visibility = View.VISIBLE
+
                     // Search for playlists matching the query using Web API
                     lifecycleScope.launch {
                         val searchResults = spotManager.searchPlaylists(query)
@@ -329,7 +339,8 @@ class SpotifyEpubReaderActivity : AppCompatActivity() {
                         }
                     }
                 } else {
-                    // If query is empty, fetch all playlists
+                    // If query is empty, fetch all playlists. Also hide the clear button
+                    playlistClearSeach.visibility = View.GONE
                     refreshPlaylists()
                 }
             }

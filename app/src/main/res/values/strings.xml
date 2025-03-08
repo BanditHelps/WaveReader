@@ -33,5 +33,6 @@
     <string name="ui_playlist_search_hint">Search playlists…</string>
     <string name="ui_now_playing_title">NOW PLAYING</string>
     <string name="ui_mini_play_pause_button">Play/Pause</string>
+    <string name="ui_clear_search_button">Clear Search</string>
 
 </resources>

@@ -51,7 +51,7 @@
         </LinearLayout>
 
         <!-- Search -->
-        <LinearLayout
+        <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
@@ -60,10 +60,13 @@
             android:background="#212121">
 
             <ImageView
+                android:id="@+id/searchIconImageView"
                 android:layout_width="18dp"
                 android:layout_height="18dp"
                 android:src="@drawable/ic_search"
                 app:tint="#B3B3B3"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
                 android:layout_marginEnd="8dp" />
 
             <EditText
@@ -76,8 +79,22 @@
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
                 android:imeOptions="actionSearch"
-                android:inputType="text" />
-        </LinearLayout>
+                android:inputType="text"
+                android:layout_toEndOf="@id/searchIconImageView"
+                android:layout_centerVertical="true"/>
+
+            <ImageView
+                android:id="@+id/clearSearchImageView"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_close"
+                app:tint="#B3B3B3"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:visibility="gone"
+                android:contentDescription="@string/ui_clear_search_button"/>
+
+        </RelativeLayout>
 
         <!-- Playlists RecyclerView -->
         <androidx.recyclerview.widget.RecyclerView
