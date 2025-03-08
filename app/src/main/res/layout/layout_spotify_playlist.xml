@@ -28,14 +28,14 @@
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:src="@drawable/ic_spotify_logo"
-                android:contentDescription="Spotify logo" />
+                android:contentDescription="@string/ui_spotify_logo" />
 
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"
                 android:layout_weight="1"
-                android:text="Spotify Playlists"
+                android:text="@string/ui_spotify_playlists_title"
                 android:textColor="#FFFFFF"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -45,9 +45,9 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="Close playlist menu"
+                android:contentDescription="@string/ui_close_playlist_button"
                 android:src="@drawable/ic_close"
-                android:tint="#FFFFFF" />
+                app:tint="#FFFFFF" />
         </LinearLayout>
 
         <!-- Search -->
@@ -63,7 +63,7 @@
                 android:layout_width="18dp"
                 android:layout_height="18dp"
                 android:src="@drawable/ic_search"
-                android:tint="#B3B3B3"
+                app:tint="#B3B3B3"
                 android:layout_marginEnd="8dp" />
 
             <EditText
@@ -71,7 +71,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="36dp"
                 android:background="@null"
-                android:hint="Search playlists"
+                android:hint="@string/ui_playlist_search_hint"
                 android:textColorHint="#B3B3B3"
                 android:textColor="#FFFFFF"
                 android:textSize="14sp"
@@ -102,7 +102,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="NOW PLAYING"
+                android:text="@string/ui_now_playing_title"
                 android:textColor="#1DB954"
                 android:textSize="12sp"
                 android:letterSpacing="0.1"
@@ -155,10 +155,10 @@
                     android:layout_width="36dp"
                     android:layout_height="36dp"
                     android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Play or pause"
+                    android:contentDescription="@string/ui_mini_play_pause_button"
                     android:padding="8dp"
                     android:src="@drawable/ic_play"
-                    android:tint="#FFFFFF" />
+                    app:tint="#FFFFFF" />
             </LinearLayout>
         </LinearLayout>
     </LinearLayout>

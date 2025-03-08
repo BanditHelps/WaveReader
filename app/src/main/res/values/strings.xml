@@ -1,4 +1,37 @@
 <resources>
     <string name="app_name">Wave Reader</string>
     <string name="book_cover_description">An example description of a book</string>
+
+    <!-- Main Menu -->
+    <string name="ui_import_book">Import Book</string>
+    <string name="ui_refresh">Refresh</string>
+    <string name="ui_delete_selected">Delete</string>
+    <string name="ui_book_cover">Book Cover</string>
+
+
+    <!-- Reader Activity -->
+    <string name="ui_font_size_default">Font Size: 100%</string>
+    <string name="ui_font_size_title">Font Size</string>
+    <string name="ui_font_icon">A</string>
+    <string name="ui_back_button">Back</string>
+    <string name="ui_spotify_button">Spotify</string>
+
+    <!-- Spotify Auth View -->
+    <string name="auth_success_title">Spotify Authentication Complete</string>
+    <string name="auth_success_message">Your Spotify account has been successfully connected.</string>
+    <string name="ui_return_to_app_button">Return to App</string>
+
+    <!-- Spotify Controls -->
+    <string name="ui_pin_playlist">Pin Playlist</string>
+    <string name="ui_previous_track_button">Previous Track</string>
+    <string name="ui_play_pause_button">Play/Pause a Track</string>
+    <string name="ui_next_track_button">Next Track</string>
+    <string name="ui_open_playlist_button">Open Playlist</string>
+    <string name="ui_spotify_logo">Spotify Logo</string>
+    <string name="ui_spotify_playlists_title">Spotify Playlists</string>
+    <string name="ui_close_playlist_button">Close Playlist Menu</string>
+    <string name="ui_playlist_search_hint">Search playlists…</string>
+    <string name="ui_now_playing_title">NOW PLAYING</string>
+    <string name="ui_mini_play_pause_button">Play/Pause</string>
+
 </resources>

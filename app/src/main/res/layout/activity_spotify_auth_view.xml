@@ -35,7 +35,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:padding="8dp"
-                android:text="Spotify Authentication Complete"
+                android:text="@string/auth_success_title"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -45,7 +45,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:padding="8dp"
-                android:text="Your Spotify account has been successfully connected."
+                android:text="@string/auth_success_message"
                 android:textSize="16sp" />
 
             <Button
@@ -53,7 +53,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
-                android:text="Return to App" />
+                android:text="@string/ui_return_to_app_button" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
