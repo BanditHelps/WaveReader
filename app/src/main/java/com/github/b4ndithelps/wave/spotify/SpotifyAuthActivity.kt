@@ -1,33 +1,48 @@
 package com.github.b4ndithelps.wave.spotify
 
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.PendingIntent
 import android.content.Intent
-import android.content.IntentFilter
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.browser.customtabs.CustomTabsIntent
-import com.github.b4ndithelps.wave.CustomTabsCloser
 import com.github.b4ndithelps.wave.SpotifyAuthCallbackActivity
 import com.github.b4ndithelps.wave.WaveReaderApplication
 
+/**
+ * SpotifyAuthActivity is responsible for initiating the Spotify authentication flow using Custom Tabs.
+ *
+ * This activity handles the following:
+ * 1. Loading the Spotify authorization URL from the SpotifyManager.
+ * 2. Launching a Custom Tab to display the Spotify login/consent page.
+ * 3. Setting up a PendingIntent to handle the authentication callback.
+ * 4. Handling the result of the Custom Tab flow in `onActivityResult`.
+ * 5. Returning the authentication result to the calling activity.
+ *
+ * The authentication flow involves:
+ *   - Starting this activity.
+ *   - The activity launches a Custom Tab.
+ *   - The user interacts with the Spotify page within the Custom Tab.
+ *   - Upon successful authentication or cancellation, the Custom Tab triggers the `SpotifyAuthCallbackActivity`.
+ *   - `SpotifyAuthCallbackActivity` communicates the result back to `SpotifyAuthActivity`.
+ *   - This activity receives the result in `onActivityResult` and forwards it to the calling component.
+ *   - Finally this activity finishes itself.
+ *
+ * Important Considerations:
+ *   - This activity relies on the `SpotifyManager` being properly initialized within the `WaveReaderApplication`.
+ *   - It uses `CustomTabsIntent` for a seamless in-app browser experience.
+ *   - Proper session management is handled by setting flags like `FLAG_ACTIVITY_NO_HISTORY` and `FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS`.
+ *   - The callback is handled by `SpotifyAuthCallbackActivity`, which expects specific extras in the intent to display a confirmation dialog and close the tab.
+ *
+ */
 class SpotifyAuthActivity : AppCompatActivity() {
 
-    private lateinit var customTabsCloseBroadcastReceiver: CustomTabsCloser
-    private val exportFlag: Int = 2
-
-    @SuppressLint("WrongConstant")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val app = application as WaveReaderApplication
         val spotManager = app.spotifyManagerInstance ?: throw IllegalStateException("SpotifyManager not initialized")
-
-        customTabsCloseBroadcastReceiver = CustomTabsCloser()
-        val intentFilter = IntentFilter(CustomTabsCloser.ACTION_CLOSE_TABS)
-        registerReceiver(customTabsCloseBroadcastReceiver, intentFilter, exportFlag)
 
         val authUrl = spotManager.loadAuthUrl()
         Log.d("SpotifyAuth", "Oncreate of auth activity")
@@ -50,6 +65,7 @@ class SpotifyAuthActivity : AppCompatActivity() {
                 .setShowTitle(true)
                 .setShareState(CustomTabsIntent.SHARE_STATE_OFF) // Disable sharing option
                 .build()
+
             // Set the pending intent for when auth completes
             customTabsIntent.intent.putExtra(CustomTabsIntent.EXTRA_SESSION, pendingIntent)
             
@@ -63,15 +79,6 @@ class SpotifyAuthActivity : AppCompatActivity() {
             Log.e("SpotifyAuth", "No Authentication Url found!")
             setResult(RESULT_CANCELED)
             finish()
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        try {
-            unregisterReceiver(customTabsCloseBroadcastReceiver)
-        } catch (e: Exception) {
-            Log.w("SpotifyAuth", "Error unregistering receiver", e)
         }
     }
 
